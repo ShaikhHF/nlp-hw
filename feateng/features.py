@@ -70,7 +70,7 @@ class GuessBlankFeature(Feature):
     """
     Is guess blank?
     """
-    def __call__(self, question, run, guess, other_guesses=None):
+    def __call__(self, question, run, guess, guess_history, other_guesses=None):
         yield ('true', len(guess) == 0)
 
 
@@ -78,7 +78,7 @@ class GuessCapitalsFeature(Feature):
     """
     Capital letters in guess
     """
-    def __call__(self, question, run, guess, other_guesses=None):
+    def __call__(self, question, run, guess, guess_history, other_guesses=None):
         yield ('true', log(sum(i.isupper() for i in guess) + 1))
 
 

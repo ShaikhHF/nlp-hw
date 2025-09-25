@@ -66,7 +66,7 @@ classification later.
 Extra credit:
 
 1.  Modify the _sg_update_ function to perform [lazy regularized updates](https://alex.smola.org/posts/3-lazy-updates/), which only update the weights of features when they appear in an example.
-    - Show the effect in an analysis document 
+    - Show the effect in an analysis document: did regularization improve held-out accuracy (or other metrics) and if so, with what regularization weight?
     
 Caution: When implementing extra credit, make sure your implementation of the
 regular algorithms doesn't change.

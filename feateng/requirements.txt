@@ -11,5 +11,3 @@ tqdm
 nltk
 bs4
 scikit-learn
-torchtext
-faiss-cpu

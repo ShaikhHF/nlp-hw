@@ -41,16 +41,18 @@ Getting Started
 
 As usual, install the packages you need, perhaps in a virtual environment:
 
-    python3 -m venv .venv
-    .venv/bin/pip3 install -r requirements.txt
+    conda create -n feateng python=3.11
+	conda activate feateng
+	pip install -r requirements.txt
 
 And if NLTK complains about missing stopwords, you can download them:
 
+ 	pip install nltk
     python -m nltk.downloader stopwords
 
 You'll also need to create a directory for the models you'll be
 creating
-
+	
      mkdir -p models
 
 But before you get started, you need to understand the overall structure of the code:
@@ -84,25 +86,27 @@ class in ``features.py``.
 
 	class FrequencyFeature:
 	    def __init__(self, name):
-		from eval import normalize_answer
-		self.name = name
-		self.counts = Counter()
-		self.normalize = normalize_answer
-
+	        from eval import normalize_answer
+	        self.name = name
+	        self.counts = Counter()
+	        self.normalize = normalize_answer
+	        
 	    def add_training(self, question_source):
-		import json
-		with gzip.open(question_source) as infile:
-			questions = json.load(infile)
-			for ii in questions:
-			    self.counts[self.normalize(ii["page"])] += 1
+	        import json
+	        with gzip.open(question_source) as infile:
+	            questions = json.load(infile)
+	        for ii in questions:
+	            self.counts[self.normalize(ii["page"])] += 1
+	            
+	    def __call__(self, question, run, guess, guess_history, guesses):
+	        # We only use question, run, and guess (same as before)
+	        # guess_history and guesses are ignored since we don't need them
+	        
+	        frequency_value = log(1 + self.counts[self.normalize(guess)])
+	        return [("guess", frequency_value)]
 
-	    def __call__(self, question, run, guess):
-		   yield ("guess", log(1 + self.counts[self.normalize(guess)]))
 
-
-Pay attention to the ``call`` function.  If you're not familiar with
-the ``yield`` keyword:
-https://realpython.com/introduction-to-python-generators/
+Pay attention to the ``call`` function.
 
 One very easy way of adding features is to just yield something else
 in a function that you already have.
@@ -132,7 +136,7 @@ be turned into a "pickle" file and stored in the models directory.  So
 let's train the classifier *without* that new feature.
 
     mkdir -p models
-    python3 buzzer.py --guesser_type=Gpr --limit=50 \
+    python buzzer.py --guesser_type=Gpr --limit=50 \
       --GprGuesser_filename=../models/buzztrain_gpr_cache \
       --questions=../data/qanta.buzztrain.json.gz --buzzer_guessers Gpr \
       --LogisticBuzzer_filename=models/no_length --features ""
@@ -163,7 +167,7 @@ let's train the classifier *without* that new feature.
 
 If you get a warning about convergence, it is okay; hopefully it will converge better with more features!  Likewise, don't worry about the warning about the features, I just wanted to be sure it didn't add the length feature.  Because we want to do that next: train a model *with* that new feature.  Note that we're naming the model something different:
 
-    python3 buzzer.py --guesser_type=Gpr --limit=50 \
+    python buzzer.py --guesser_type=Gpr --limit=50 \
       --GprGuesser_filename=../models/buzztrain_gpr_cache \
       --questions=../data/qanta.buzztrain.json.gz --buzzer_guessers Gpr \
       --LogisticBuzzer_filename=models/with_length --features Length
@@ -202,14 +206,14 @@ Now you need to evaluate the classifier.  The script eval.py will run the classi
 
 Let's compare with the Length:
 
-    python3 buzzer.py --guesser_type=Gpr --limit=50 \
+    python buzzer.py --guesser_type=Gpr --limit=50 \
     --GprGuesser_filename=../models/buzztrain_gpr_cache \
     --questions=../data/qanta.buzztrain.json.gz --buzzer_guessers Gpr \
     --features Length Frequency
 
 compared to without it:
 
-    .venv/bin/python3  eval.py --guesser_type=Gpr \
+    python  eval.py --guesser_type=Gpr \
     --TfidfGuesser_filename=models/TfidfGuesser --limit=25 \
      --questions=../data/qanta.buzzdev.json.gz --buzzer_guessers Gpr \
      --GprGuesser_filename=../models/buzzdev_gpr_cache  \
@@ -248,7 +252,7 @@ be positive), and the buzz position (where in the question it's buzzing).
 
 And now we'll see what it is without the length features:
 
-    Questions Right: 87 (out of 201) Accuracy: 0.76  Buzz ratio: 66.50 Buzz position: -0.255239
+    Questions Right: 81 (out of 201) Accuracy: 0.74  Buzz ratio: 58.50 Buzz position: -0.195907
 
 Again, don't focus too much on the accuracy.  The accuracy is actually higher
 for the no feature model!  But the proportion of "Best" outcomes is higher by
@@ -333,7 +337,7 @@ set of your best features runs by *default*.
     script named ``gather_resources.sh`` that will retrieve one or both of the
     files above programatically from a public location (i.e a public S3
     bucket).
-* The LogisticBuzzer.model.pkl file and LogisticBuzzer.featurizer.pkl file created by training the classifier.
+* The ``LogisticBuzzer.model.pkl`` file and ``LogisticBuzzer.featurizer.pkl`` file created by training the classifier.
 * ``analysis.pdf``: Your **PDF** file containing your feature engineering
 analysis.
 
@@ -346,7 +350,7 @@ Checking the Cache
 
 If things aren't working well, you might have missing cache elements.  You can check if your cache "hits" enough by running this command:
 
-    jbg:GPT3QA jordan$ .venv/bin/python3 gpr_guesser.py --cache=models/buzztrain_gpr_cache --source_jsongz=data/qanta.buzztrain.json.gz
+    jbg:GPT3QA jordan$ python gpr_guesser.py --cache=models/buzztrain_gpr_cache --source_jsongz=data/qanta.buzztrain.json.gz
     INFO:root:Loading 609173 questions and 609173 answers
     Loaded 18460 question
     Generating runs of length 100
@@ -373,7 +377,7 @@ are.  How do I know what the features look like?**
 **A.** Use ``features.py`` to investigate this.  This is how we
 generated the JSON files for the logistic regression homework.
 
-    python3 features.py --json_guess_output=../data/inspect.jsonl --buzzer_guessers 'Gpr' --questions=../data/qanta.buzztrain.json.gz --limit=1000
+    python features.py --json_guess_output=../data/inspect.jsonl --buzzer_guessers 'Gpr' --questions=../data/qanta.buzztrain.json.gz --limit=1000
 
 Make sure that you've enabled all of the features that you want to use.
 

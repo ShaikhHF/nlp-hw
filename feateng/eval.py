@@ -245,7 +245,7 @@ if __name__ == "__main__":
               (outcomes["best"], # Right
                total,            # Total
                (outcomes["best"] + outcomes["waiting"]) / total, # Accuracy
-               (outcomes["best"] - outcomes["aggressive"] * 0.5) / total, # Ratio
+               (outcomes["best"] - outcomes["aggressive"] * 0.5), # Ratio
                unseen))
     elif flags.evaluate == "guesser":
         print("Precision @1: %0.4f Recall: %0.4f" % (outcomes["hit"]/total, outcomes["close"]/total))
