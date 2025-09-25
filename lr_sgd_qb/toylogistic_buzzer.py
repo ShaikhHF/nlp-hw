@@ -152,21 +152,36 @@ class ToyLogisticBuzzer(Buzzer):
         Compute a stochastic gradient update to improve the log likelihood and return the new feature weights.
 
         Args:
-           train_example: The example to take the gradient with respect to
-           iteration: what iteration we are on
+            train_example: The example to take the gradient with respect to
+            iteration: what iteration we are on
         Returns:
-           The new parameter vector
+            The new parameter vector
         """
         mu = self._mu
         step = self._step
         beta = self._beta
         
+        prediction = sigmoid(beta.dot(train_example.x))
+        
+        error = prediction - train_example.y
+    
+        if self._lazy and mu > 0:
+            # only update the weights of features when they appear in an example
+            for i in train_example.nonzero:  # iterate over non-zero features
 
-
-
-
-
-
+                steps_since_update = iteration - self._last_update[i]
+                if steps_since_update > 0:
+                    regularization_factor = (1 - step * mu) ** steps_since_update
+                    beta[i] *= regularization_factor
+                    self._last_update[i] = iteration
+                
+                gradient_i = error * train_example.x[i]
+                beta[i] = beta[i] - step * gradient_i
+        else:
+            for i in range(len(beta)):
+                gradient_i = error * train_example.x[i] + mu * beta[i]
+                beta[i] = beta[i] - step * gradient_i
+    
         return beta
 
     def finalize_lazy(self, iteration: int) -> np.array:
@@ -178,6 +193,19 @@ class ToyLogisticBuzzer(Buzzer):
         """
 
         beta = self._beta
+
+        if self._lazy and self._mu > 0:
+            step = self._step
+            mu = self._mu
+            
+            for i in range(len(beta)):
+                # Apply accumulated regularization since last update
+                steps_since_update = iteration - self._last_update[i]
+                if steps_since_update > 0:
+                    regularization_factor = (1 - step * mu) ** steps_since_update
+                    beta[i] *= regularization_factor
+                    self._last_update[i] = iteration
+        
         return beta
 
     
@@ -196,7 +224,7 @@ class ToyLogisticBuzzer(Buzzer):
             logging.info("Feat %35s %3i: %+0.5f" %
                          (vocab[idx], idx, self._beta[idx]))
     
-    return top, bottom
+        return top, bottom
 
     
     def train(self, train = None, test = None, vocab=None, passes=1):
