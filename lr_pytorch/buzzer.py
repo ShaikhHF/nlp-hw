@@ -12,9 +12,6 @@ from tqdm import tqdm
 
 from collections import Counter
 from collections import defaultdict
-from collections.abc import Iterable
-
-from typing import Dict
 
 from guesser import add_guesser_params
 from features import LengthFeature
@@ -76,12 +73,16 @@ class Buzzer:
         logging.info("Buzzer using run length %i" % self.run_length)
         
         self._finalized = False
+        self._primary_guesser = None
         self._classifier = None
         self._featurizer = None
 
-    def add_guesser(self, guesser_name, guesser):
+    def add_guesser(self, guesser_name, guesser, primary_guesser=False):
         """
         Add a guesser identified by guesser_name to the set of guessers.
+
+        If it is designated as the primary_guesser, then its guess will be
+        chosen in the case of a tie.
 
         """
 
@@ -90,6 +91,8 @@ class Buzzer:
         assert guesser_name is not None
         assert guesser_name not in self._guessers
         self._guessers[guesser_name] = guesser
+        if primary_guesser:
+            self._primary_guesser = guesser_name
 
     def add_feature(self, feature_extractor):
         """
@@ -103,60 +106,54 @@ class Buzzer:
         logging.info("Adding feature %s" % feature_extractor.name)
         
     def featurize(self, question, run_text, guess_history,
-                  guesses=None) -> Iterable[Dict]:
+                  guesses=None, guess_count=None):
         """
         Turn a question's run into features.
 
-        Param:
         guesses -- A dictionary of all the guesses.  If None, will regenerate the guesses.
-
-        
+        guess_count -- A count of all of the other guesses
         """
         
         features = {}
-        all_guesses = Counter()
         guess = None
 
         # If we didn't cache the guesses, compute them now
         if guesses is None:
             guesses = {}            
-            for guesser in self._guessers:
-                guesses[guesser] = self._guessers[guesser](run_text, self.num_guesses)
+            for gg in self._guessers:
+                guesses[gg] = self._guessers[gg](run_text)
 
-        # Count all of the guesses across all guessers
-        for guesser in self._guessers:
-            for guess in guesses[guesser]:
-                all_guesses[guess["guess"]] += 1
+        for gg in self._guessers:
+            assert gg in guesses, "Missing guess result from %s" % gg
+            result = list(guesses[gg])[0]
+            if gg == self._primary_guesser:
+                guess = result["guess"]
+
+            # This feature could be useful, but makes the formatting messy
+            # features["%s_guess" % gg] = result["guess"]
+            features["%s_confidence" % gg] = result["confidence"]
+
+            for other_guesses in guesses[gg]:                         
+                all_guesses[other_guesses["guess"]] += 1              
 
         if len(all_guesses) > 1:                                            
             consensus_guess, consensus_count = all_guesses.most_common(1)[0]
-                
-        for guesser in self._guessers:           
-            for guess_info in guesses[guesser]:
-                features = {}
-                guess = guess_info["guess"]
+            if consensus_guess == guess:                                    
+                logging.debug("Consensus guess matches to guess %s" % guess)
+                features["consensus_count"] = consensus_count - 1
+                features["consensus_match"] = 1
+            else:                                                           
+                features["consensus_count"] = all_guesses[guess] - 1
+                features["consensus_match"] = 0
 
-                # This feature could be useful, but makes the formatting messy
-                # features["%s_guess" % guesser] = result["guess"]
-                if len(self._guessers) > 1:
-                    features["guesser"] = guesser
+        for ff in self._feature_generators:
+            for feat, val in ff(question, run_text, guess, guess_history, guesses):
+                features["%s_%s" % (ff.name, feat)] = val
 
-                if len(all_guesses) > 1:                                            
-                    if consensus_guess == guess:                                    
-                        logging.debug("Consensus guess matches to guess %s" % guess)
-                        features["consensus_count"] = consensus_count - 1
-                        features["consensus_match"] = 1
-                    else:                                                           
-                        features["consensus_count"] = all_guesses[guess] - 1
-                        features["consensus_match"] = 0
-
-                features["%s_confidence" % guesser] = guess_info["confidence"]
-
-                for ff in self._feature_generators:
-                    for feat, val in ff(question, run_text, guess, guess_history, guesses):
-                        features["%s_%s" % (ff.name, feat)] = val
-
-                yield guess, features
+        assert guess is not None or guesses[self._primary_guesser][0]["guess"] is None, \
+          "Guess was not set (Primary=%s, others=%s) Guesses=%s" % \
+          (self._primary_guesser, str(set(guesses)), str(guesses))
+        return guess, features
 
     def finalize(self):
         """
@@ -164,6 +161,8 @@ class Buzzer:
         """
         
         self._finalized = True
+        if self._primary_guesser is None:
+            self._primary_guesser = "consensus"
         
     def add_data(self, questions, answer_field="page"):
         """
@@ -211,59 +210,52 @@ class Buzzer:
         num_runs = len(self._runs)
 
         logging.info("Generating all features")
-        question_id = -1
-        for run_index in tqdm(range(num_runs)):
-
-            # If we've moved on to a new question, erase the history
-            if question_id != self._questions[run_index]['qanta_id']:
-                history = []
-                question_id = self._questions[run_index]['qanta_id']
+        for question_index in tqdm(range(num_runs)):
+            question_guesses = dict((x, all_guesses[x][question_index]) for x in self._guessers)
+            guess_history = defaultdict(dict)
+            for guesser in question_guesses:
+                # print("Building history with depth %i and length %i" % (history_depth, history_length))
+                guess_history[guesser] = dict((time, guess[:history_depth]) for time, guess in enumerate(all_guesses[guesser]) if time < question_index and time > question_index - history_length)
 
             # print(guess_history)
-            question = self._questions[run_index]
-            run = self._runs[run_index]
-            answer = self._answers[run_index]
+            question = self._questions[question_index]
+            run = self._runs[question_index]
+            answer = self._answers[question_index]
+            guess, features = self.featurize(question, run, guess_history, question_guesses)
+            
+            self._features.append(features)
+            self._metadata.append({"guess": guess, "answer": answer, "id": question["qanta_id"], "text": run})
 
-            run_guesses = dict((x, all_guesses[x][run_index]) for x in self._guessers)
-
-            for guess, features in self.featurize(question, run, history, run_guesses):
-                print("***", guess, features)
-                self._features.append(features)
-                self._metadata.append({"guess": guess, "answer": answer, "id": question["qanta_id"], "text": run})
-
-                correct = rough_compare(guess, answer)
-                logging.debug(str((correct, guess, answer)))
+            correct = rough_compare(guess, answer)
+            logging.debug(str((correct, guess, answer)))
                 
-                self._correct.append(correct)
+            self._correct.append(correct)
 
-            # save the history
-            if history_depth > 0 and history_length > 0:
-                # remove old guesses from history
-                if len(history) > history_length:
-                    history = history[1:]
-                    history.append(dict(x, run_guesses[guesser][:history_depth]) for x in self._guessers)
-                
                 
             assert len(self._correct) == len(self._features)
             assert len(self._correct) == len(self._metadata)
+        
+        assert len(self._answers) == len(self._correct), \
+            "Answers (%i) does not match correct (%i)" % (len(self._answers), len(self._features))
+        assert len(self._answers) == len(self._features)        
 
         if "GprGuesser" in self._guessers:
             self._guessers["GprGuesser"].save()
             
         return self._features
     
-    def single_predict(self, question, run, guess_history):
+    def single_predict(self, run):
         """
         Make a prediction from a single example ... this us useful when the code
-        is run in real-time.  But doesn't use the guess history.
+        is run in real-time.
 
         """
+        
+        guess, features = self.featurize(None, run)
 
-        # TODO(jbg): Make this use the run / guess history
+        X = self._featurizer.transform([features])
 
-        for guess, features in self.featurize(question, run, guess_history, guesses=None):
-            X = self._featurizer.transform([features])
-            yield self._classifier.predict(X), guess, features
+        return self._classifier.predict(X), guess, features
     
            
     def predict(self, questions, online=False):
@@ -348,14 +340,14 @@ if __name__ == "__main__":
     questions = load_questions(flags)
 
     buzzer.add_data(questions)
-    features = buzzer.build_features(flags.buzzer_history_length,
-                                     flags.buzzer_history_depth)
+    buzzer.build_features(flags.buzzer_history_length,
+                          flags.buzzer_history_depth)
 
     buzzer.train()
     buzzer.save()
 
     if flags.limit == -1:
-        print("Ran on %i questions, %i runs, %i guesses" % (len(questions), len(buzzer._runs), len(features)))
+        print("Ran on %i questions" % len(questions))
     else:
-        print("Ran on %i (limit=%i) questions, %i runs, %i guesses" % (len(questions), flags.limit, len(buzzer._runs), len(features)))
+        print("Ran on %i questions of %i" % (flags.limit, len(questions)))
     

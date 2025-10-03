@@ -6,6 +6,8 @@ import argparse
 import os
 
 from typing import Union, Dict
+from collections.abc import Iterable
+
 import math
 import logging
 from tqdm import tqdm
@@ -34,11 +36,11 @@ class DummyVectorizer:
     """
     A dumb vectorizer that only creates a random matrix instead of something real.
     """
-    def __init__(self, width=50):
+    def __init__(self, width:int=50):
         self.width = width
         self.vocabulary_ = {}
     
-    def transform(self, questions):
+    def transform(self, questions: Iterable):
         import numpy as np
         return np.random.rand(len(questions), self.width)
 
@@ -46,13 +48,14 @@ class TfidfGuesser(Guesser):
     """
     Class that, given a query, finds the most similar question to it.
     """
-    def __init__(self, filename, min_df=10, max_df=0.4):
+    def __init__(self, filename:str, min_df:int=10, max_df:float=0.4):
         """
         Initializes data structures that will be useful later.
 
-        filename -- base of filename we store vectorizer and documents to
-        min_df -- we use the sklearn vectorizer parameters, this for min doc freq
-        max_df -- we use the sklearn vectorizer parameters, this for max doc freq
+        Args:
+           filename: base of filename we store vectorizer and documents to
+           min_df: we use the sklearn vectorizer parameters, this for min doc freq
+           max_df: we use the sklearn vectorizer parameters, this for max doc freq
         """
 
         # You'll need add the vectorizer here and replace this fake vectorizer
@@ -63,7 +66,7 @@ class TfidfGuesser(Guesser):
         self.filename = filename
 
     def train(self, training_data, answer_field='page', split_by_sentence=True,
-                  min_length=-1, max_length=-1, remove_missing_pages=True):
+                    min_length=-1, max_length=-1, remove_missing_pages=True):
         """
         The base class (Guesser) populates the questions member, so
         all that's left for this function to do is to create new members
@@ -91,7 +94,7 @@ class TfidfGuesser(Guesser):
         with open("%s.tfidf.pkl" % path, 'wb') as f:
             pickle.dump(self.tfidf, f)
 
-    def __call__(self, question, max_n_guesses=4):
+    def __call__(self, question, max_n_guesses):
         """
         Given the text of questions, generate guesses (a list of both both the page id and score) for each one.
 
@@ -116,9 +119,10 @@ class TfidfGuesser(Guesser):
             guess =  {"question": self.questions[idx], "guess": self.answers[idx],
                       "confidence": cos[idx]}
             guesses.append(guess)
+        assert len(guesses) <= max_n_guesses, "Too many guesses: %i > %i" % (len(guesses), max_n_guesses)
         return guesses
 
-    def batch_guess(self, questions, max_n_guesses, block_size=1024):
+    def batch_guess(self, questions:Iterable[str], max_n_guesses:int, block_size:int=1024) -> Iterable[Dict[str, Union[str, float]]]:
         """
         The batch_guess function allows you to find the search
         results for multiple questions at once.  This is more efficient
@@ -133,6 +137,12 @@ class TfidfGuesser(Guesser):
 
         The most complicated part is sorting the resulting similarities,
         which is a good use of the argpartition function from numpy.
+
+        Args:
+           questions: the questions we'll produce answers for
+           max_n_guesses: number of guesses to return
+           block_size: split large lists of questions into arrays of this many rows
+        Returns:
         """
 
         # IMPORTANT NOTE FOR HOMEWORK: you do not need to complete

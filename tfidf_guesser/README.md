@@ -19,27 +19,27 @@ been implemented for you.  If you are over-implementing, you are generating
 extra work for yourself and making yourself vulnerable to errors.
 
 That said, the second part of the homework---doing as well as you can
-buzzing---is meant to be more fun and open-ended.
+buzzing and tuning the guesser(s)---is meant to be more fun and open-ended.
 
 You'll turn in your code on Gradescope.
 
 What you have to do
 ----
 
-Coding (15 points in the tfidf_guesser.py):
+Coding:
 
 1.  (Optional) Store necessary data in the constructor so you can do retrieval later.
 1.  Modify the _train_ function so that the class stores what it needs to store to guess at what the answer is.
 1.  Modify the _call_ function so that it finds the closest indicies (in terms of *cosine* similarity) to the query.
 
-Analysis (5 points):
+Analysis:
 
 1.  What answers get confused with each other most easily?  What kinds of
     mistakes does this guesser make?
 1.  How does this guesser compare to GPT?  (Remember that the cached guesser from the feature engineering homework came from GPT3, so you could either use your old code or adapt with multiple guessers here!)
-1.  Compute recall as you increase the number of guesses (i.e. `max_n_guesses`).
+1.  Compute recall as you increase the number of guesses (i.e. `num_guesses`).
 
-Accuracy (10 points): How well you do on the recall leaderboard.
+Accuracy: How well you do on the recall leaderboard.
 
 What you don't have to do
 -------
@@ -76,7 +76,7 @@ tests:
 Your numeric results might not exactly match the similarities here,
 but the ranking should still be consistent.
 
-You might notice the batch guess test failed with the current `batch_guess` function. You could either implement the function (though not required) or use the same function from its parent class.
+You might notice the batch guess test failed with the current `batch_guess` function. This function is not implemented correctly in the code that you have.  If you delete the function, it will use the parent class's implementation (which will work and be slow) or you can implement the function yourself.
 
 What to turn in
 -
@@ -85,12 +85,12 @@ For the guesser submission:
 2. Submit your _analysis.pdf_ file (no more than one page; pictures
     are better than text)
 
-For the extra credit submission:
-1. Submit your _tfidf_guesser.py_ file
+For the extra credit (buzzer) submission:
+1. Submit your _tfidf_guesser.py_ file (the same one for the normal assignment)
 2. Submit the ``TfidfGuesser.answers.pkl``,
    ``TfidfGuesser.questions.pkl``, ``TfidfGuesser.tfidf.pkl`` and the
    ``TfidfGuesser.vectorizer.pkl`` files that encode your model. 
-3. For the extra credit buzzer, also upload your _params.py_ and _features.py_ files and your classifier pickles.
+3. Also upload your _params.py_ and _features.py_ files and your classifier pickles.
     
 
 Extra Credit
@@ -100,10 +100,10 @@ There will be two different places to submit your code on Gradescope:
 one that only tests the guesser, one that specifically tests the
 buzzer.  The guesser evaluation will retrain your model, the buzzer
 evaluation will use the the uploading model directly.  
-1. Optimize the retrieval mechanism by tuning parameters, weighting, and/or using
+1. For the guesser, you can get extra credit by optimizing the retrieval mechanism by tuning parameters, weighting, and/or using
    different tokenizers/vocabularies.
-2. Do well in the overall leaderboard (while overall buzz ratio and accuracy is important, more
-   important is using features that take advantage of tfidf guesser features or
+2. For the buzzer, do well in the buzzer overall leaderboard (while overall buzz ratio and expected wins is important, more
+   important is using features that take advantage of tfidf guesser features, using multiples guesses, or
    multiple guessers.)
 3. Add additional tf-idf guessers (e.g., from the provided Wikipedia pages).  You can create an additional
     guesser if you want to keep it separate from the tfidf_guesser.  If you do
@@ -111,7 +111,14 @@ evaluation will use the the uploading model directly.
 5. You can and should use multiple guessers (e.g., it's allowed to use
    the GPT and tf-idf guesser).  You can also create a new guesser.
 
-What makes this more fun than the last feature engineering assignment is that you have full control over the buzzer now, and you get to change what it's producing.  So now you can do more than create features *given* the guesses, you can now fix the guesser's problems as well!
+What makes this more fun than the last feature engineering assignment
+is that you have full control over the buzzer and guesser now, and you get to
+change what it's producing.  So now you can do more than create
+features *given* the guesses, you can now fix the guesser's problems
+as well!
+
+You will probably want to play around with different tokenization
+schemes (building on what you learned from the BPE homework).
 
 Example
 -
@@ -507,9 +514,10 @@ to distinguish middling guesses from the top guesses.
 Good Enough
 -
 
-For the "Good Enough" threshold, you need to implement tfidf on par
-with the baseline.  You do not need to do additional feature
-engineering.  
+For the "Good Enough" threshold, you need to implement a tfidf guesser on par
+with the baseline.  You do not need to submit a buzzer.  
+
+The TAs will submit a *baseline* model that you can compare against.
 
 Extra Credit
 -
@@ -671,11 +679,11 @@ guess has been made (higher is better, presumably).
     {"guess: ": 1, "Tfidf_confidence": 0.32610226495081074, "consensus": 0, "Length_char": -0.7666666666666667, "Length_word": -0.72, "Length_ftp": 0, "Length_guess": 0.6931471805599453, "Frequency_guess": 9.103089181229207, "Category_category:Fine Arts": 1, "Category_year": 3.4011973816621555, "Category_subcategory:Fine Arts Visual": 1, "Category_tournament:ACF Winter": 1, "label": false}
 
 This becomes more relevant for using multiple guessers.  If we use
-both guessers with the Gpr guesser as the primary guesser, we can now
+both guessers, we can now
 see how this can help us.  So we generate the features (use a similar
 command line for this to be your buzzer).
 
-    python3 features.py --limit=100  --question_source=gzjson --TfidfGuesser_filename=models/TfidfGuesser  --questions=../data/qanta.buzztrain.json.gz --buzzer_guessers Tfidf Gpr --primary_guesser Gpr --json_guess_output=temp.out
+    python3 features.py --limit=100  --question_source=gzjson --TfidfGuesser_filename=models/TfidfGuesser  --questions=../data/qanta.buzztrain.json.gz --buzzer_guessers Tfidf Gpr --json_guess_output=temp.out
 
 Now we can see for this question: 
 
@@ -693,7 +701,8 @@ more matches, so the consensus count is going up.  This is a great
 feature that can help the `Gpr_confidence` actually going down.  
 
 Speaking of, you might want to play around how that confidence is
-computed as well.  Take a look at the cache object (use `buzzdev` below as an example):
+computed as well.  Take a look at the cache object (use `buzzdev`
+below as an example):
 
     zless ../models/buzzdev_gpr_cache.tar.gz
       "After this character relates a story about how he didn't know the proper way to use a wheelbarrow, he": {
@@ -777,7 +786,7 @@ computed as well.  Take a look at the cache object (use `buzzdev` below as an ex
           ]
         }
           	
-You could imagine other ways of using the word piece probabilities
+You could imagine other ways of using the token probabilities
 rather than just taking the arithmetic mean of the log probs (which is
 what the code is currently doing).  As before, the goal is to be
 creative and to understand the data.  Good luck!
@@ -789,57 +798,109 @@ that you've trained it on as much data as possible.  You'll need to
 modify `params.py` so that whatever works best for you is the
 default.  
 
-These submissions will be the foundation for our in-class exposition
+These submissions will be the foundation for an in-class exposition
 game, so please do try to do this extra credit, as this will be one of
 the most fun opportunities we'll have for extra credit in the class.
 
-Hints
+
+Using Multiple Guessers
 -
 
+Here's an example of training a tf-idf guesser, a Wikipedia guesser,
+and a GPT guesser.
+
+The tf-idf guesser and GPT guesser you already know.  But let's just
+go through that for good measure.
+
+    % ./venv/bin/python3  guesser.py --guesser_type=Tfidf \
+       --question_source=gzjson \
+       --questions=../data/qanta.guesstrain.json.gz \
+    --logging_file=guesser.log
+    Setting up logging
+    INFO:root:Initializing guesser of type Tfidf
+    INFO:root:Loading questions from ../data/qanta.guesstrain.json.gz
+    INFO:root:Read 121984 questions
+    100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 121984/121984 [00:03<00:00, 38347.91it/s]
+    100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 32976/32976 [00:00<00:00, 1290049.52it/s]
+    INFO:root:Trained with 596401 questions and 596401 answers filtered from 121984 examples
+    INFO:root:Creating tf-idf dataframe with 596401
+
+I've now made a Wikipedia guesser that uses the information from this
+file: 
+	https://dumps.wikimedia.org/other/kiwix/zim/wikipedia/wikipedia_en_top_nopic_2025-09.zim
+	
+It's much bigger than the Wikipedia JSON we've provided (and so you
+will be need to cull information from it from whatever pkl you
+upload), but this would give you more flexibility.
+
+    % ./venv/bin/python3  guesser.py --guesser_type=Wiki \
+    --question_source=gzjson \
+    --questions=../data/qanta.guesstrain.json.gz \
+    --logging_file=guesser.log \
+    --limit=10
+
+Now that we have guessers trained, train a buzzer to predict
+when they're correct.
+
+        python3 buzzer.py --buzzer_type=LogisticBuzzer --TfidfGuesser_filename=models/TfidfGuesser --question_source=gzjson --questions=data/qanta.buzztrain.json.gz --features Length --buzzer_guessers Gpr Tfidf Wiki --features Length Frequency
+
+Hints
+-
+1.  To run the eval script on last homework's GPR guesser and get the guesser metrics, try doing `eval.py --guesser_type=Gpr --limit=100 --questions=../data/qanta.buzztrain.json.gz --evaluate=guesser --GprGuesser_filename=../models/buzztrain_gpr_cache`
 1.  Don't use all of the data, especially at first.  Use the _limit_
     command line argument (as in the above example).  Indeed, you
-    might be able to improve accuracy by *excluding* some of the data.
-1.  On a related note, don't create a [dense matrix](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.todense.html) out of tf-idf counts.  By default, the tf-idf libraries will create a sparse matrix where only the non-zero elements are allocated memory.  A dense matrix will require way too much space (e.g., if you have 25k terms and 300k documents, that's going to be around 50 GiB, and that's going to be too big for most laptops and certainly for Gradescope).  Any of the operations that you need to do you can do with the sparse matrix.
-3.  In case you see an error that your submission timed out on Gradescope, that means that your code needs to be simplified. 
+    might be able to improve accuracy by *excluding* some of the data. 
+1.  That being said, your recall and precision will be zero if your limit is **too** low.  Use a small limit to make sure you don't have any bugs, then increase your limit to be large enough to have the answers you're looking for.
+1.  On a related note, don't create a [dense
+    matrix](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.todense.html)
+    out of tf-idf counts.  By default, the tf-idf libraries will
+    create a sparse matrix where only the non-zero elements are
+    allocated memory.  A dense matrix will require way too much space
+    (e.g., if you have 25k terms and 300k documents, that's going to
+    be around 50 GiB, and that's going to be too big for most laptops
+    and certainly for Gradescope).  Any of the operations that you
+    need to do you can do with the sparse matrix.
+1.  In case you see an error that your submission timed out on Gradescope, that means that your code needs to be simplified. 
     This is essential for your  code to work on Gradescope, so think of ways
     you can optimize your code.  Another issue if
     if you're trying to create the matrix one row at a time; it's possible to
     do it in batch, and that will speed things up.
-2.  If the guesser submission says that your pickle file is missing, this means that the guesser training errored out and didn't generate the file.      
-2.  Another problem with the (extra credit) submission might be that your pickle file (how your vectorizer / matrix is saved) is too large (Gradescope has a 100MB limit).  Remember that your tf-idf representation is a matrix.  It could be that your tf-idf representation
+1.  If the guesser submission says that your pickle file is missing, this means that the guesser training errored out and didn't generate the file.      
+1.  Another problem with the (extra credit) submission might be that your pickle file (how your vectorizer / matrix is saved) is too large (Gradescope has a 100MB limit).  Remember that your tf-idf representation is a matrix.  It could be that your tf-idf representation
     is too wide (too many terms) or too tall (too many documents).  You had to
     deal with this before in your previous tf-idf homework.  (Think
     about building your vocabulary!  There are similar options in ``sklearn``)
-2.  tf-idf representations do not know anything about syntax or part of
+1.  tf-idf representations do not know anything about syntax or part of
     speech.  You could add features to correct some of these problems.  (This
     is just for the extra credit!)    
-6.  Don't forget about the definition of what a token is and how it's flexible.  The sklearn
+1.  Don't forget about the definition of what a token is and how it's flexible.  The sklearn
     tokenizer does support n-grams, which may help you in the extra credit (but consume more
     memory):
     https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.CountVectorizer.html 
-5.  The buzzer leaderboard will report both accuracy and buzz ratio.  Both are important, as you can only decide if a guess is
+1.  The buzzer leaderboard will report both accuracy, buzz ratio, and
+    expected wins.  Both are important, as you can only decide if a guess is
     correct if the correct guess is an option: you can get 100%
     accuracy on the buzzer if all of the guesses are wrong... but your
     buzz position will be horrible.
-7.  *Do not focus on buzzer accuracy to early*!  When your guesser is broken, all of
+1.  *Do not focus on buzzer accuracy to early*!  When your guesser is broken, all of
     the guesses will be wrong and you'll trivially get perfect buzz accuracy
     (always wait).  Unless you're going for going after extra credit, you should pay attention to precision and recall (which are specific to the guesser).
-8.  That said, accuracy comes from the buzzer; if you have a bad
+1.  That said, accuracy comes from the buzzer; if you have a bad
     accuracy score despite updating the guesser, it's possible that
     the pickle for your buzzer has not been updated and is looking for
     the wrong features (or is miscalibrated).  Focusing on buzz
     position is more worthwhile.
-9.  If you find that things are taking too long (things are timing out on Gradescope), implement the ``batch_guess`` function to guess on many examples at once.
-10.  ``sklearn`` helps you build the vector space for TF-IDF, but this vector space always needs to be consistent.  You devine the vector space through the vectorizer ``fit`` function.  If you get the error ``ValueError: Incompatible dimension for X and Y matrices:`` when computing cosine similarity, this suggests that you failed to do this (e.g., you've implicitly defined multiple vector spaces, running ``fit`` multiple times).  If you get the error ``sklearn.exceptions.NotFittedError``, this means that you have not established the vector space.  Think carefully about on which data you need to build the vector space and then consistently apply that everywhere else.
-11.  For the extra credit, we strongly recommend you use the GPT guesser **in conjunction** with the tf-idf guesser.  Make the GPT guesser the primary guesser, and then you can add additional tf-idf features to that.  It should improve from what you were able to do with the GPT guesser alone.  You're also welcome to add additional guessers / information (like from Wikipedia).
-9.  Once you've completed the required part of the homework and you're
+1.  If you find that things are taking too long (things are timing out on Gradescope), implement the ``batch_guess`` function to guess on many examples at once.
+1.  ``sklearn`` helps you build the vector space for TF-IDF, but this vector space always needs to be consistent.  You devine the vector space through the vectorizer ``fit`` function.  If you get the error ``ValueError: Incompatible dimension for X and Y matrices:`` when computing cosine similarity, this suggests that you failed to do this (e.g., you've implicitly defined multiple vector spaces, running ``fit`` multiple times).  If you get the error ``sklearn.exceptions.NotFittedError``, this means that you have not established the vector space.  Think carefully about on which data you need to build the vector space and then consistently apply that everywhere else.
+1.  For the extra credit, we strongly recommend you use the GPT guesser **in conjunction** with the tf-idf guesser.  Make the GPT guesser the primary guesser, and then you can add additional tf-idf features to that.  It should improve from what you were able to do with the GPT guesser alone.  You're also welcome to add additional guessers / information (like from Wikipedia).
+1.  Once you've completed the required part of the homework and you're
     trying to increase the recall further, you can investigate
     changing the dimensions of the vectorization: what normalization
     is applied to the words, what data are included, or looking at
     n-grams.  Also don't forget
     about the wiki pages:
     https://drive.google.com/file/d/1-AhjvqsoZ01gz7EMt5VmlCnVpsE96A5n/view?usp=share_link. The file is under the `data` folder on gradescope.
-11.  If you get an error ``max_df corresponds to < documents than min_df``, think about what this means.  It's complaining that you're excluding all tokens by setting thresholds that would exclude **everything**.  There are two likely causes for this:
+1.  If you get an error ``max_df corresponds to < documents than min_df``, think about what this means.  It's complaining that you're excluding all tokens by setting thresholds that would exclude **everything**.  There are two likely causes for this:
      - One cause is tricky.  For the unit tests, we tell you to have ``max_df=1.0, min_df=0.0`` (i.e., let everything in).  But if you instead type ``max_df=1, min_df=0``, then it will exclude everything appearing in more than one document.  This is because interprets not specifying them as float (which are interpreted as frequency) but rather as ints (which are interpreted as number of documents).  **Important:*** The constructor defaults (``min_df=10`` and ``max_df=0.4``) are different from behavior to be tested.  You can and should set your tokenizer thresholds based on performance **differently** from how you set them to pass the unit tests.
      -  The defaults might also trigger if your limit flag is too small.  In other words, if you're using 25 or fewer documents, then 10 will be the same as 0.4.  This is of course the case on the unit tests, where you should be using ``max_df=1.0, min_df=0.0``.
     

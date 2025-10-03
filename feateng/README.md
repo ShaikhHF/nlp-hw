@@ -36,6 +36,8 @@ we've covered in the class.  The bare essentials are classifiers,
 information retrieval, and feature engineering, but it may be helpful
 to review our coverage of syntax, semantics, etc.
 
+The other important part of this homework is learning the basics of comparing models.  Through the course of this assignment, you'll create models that you'll need to compare with each other.  You'll save these models as pkl (Pickle) files and upload them to Gradescope to see how well they do on a held-out test set.
+
 Getting Started
 -
 
@@ -165,7 +167,12 @@ let's train the classifier *without* that new feature.
     100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 401/401 [00:00<00:00, 54978.95it/s]
     Ran on 50 questions of 50
 
-If you get a warning about convergence, it is okay; hopefully it will converge better with more features!  Likewise, don't worry about the warning about the features, I just wanted to be sure it didn't add the length feature.  Because we want to do that next: train a model *with* that new feature.  Note that we're naming the model something different:
+If you get a warning about convergence, it is okay; hopefully it will
+converge better with more features!  Likewise, don't worry about the
+warning about the features, I just wanted to be sure it didn't add the
+length feature.  Because we want to do that next: train a model *with*
+that new feature.  Note that we're naming the model something
+different:
 
     python buzzer.py --guesser_type=Gpr --limit=50 \
       --GprGuesser_filename=../models/buzztrain_gpr_cache \
@@ -204,7 +211,29 @@ Now you need to evaluate the classifier.  The script eval.py will run the classi
  * _waiting_: Guess was wrong, Buzz was correct
 
 
-Let's compare with the Length:
+In the template code that you're given, you have code that will create
+a feature based on the length of properties of the guess.  However,
+the template code will only return how long the guess is at the
+moment.  
+
+In the code that I have below, it's using additional features that
+look at how long the run is in characters, how long the run is in
+words, and whether the phrase "for ten points" has appeared in the
+question (something that shows that it's getting near the end).  If
+you want to add features like that, add yield statements like:
+
+    yield ("word", len(run.split()))
+    yield ("char", len(run))
+	
+You may also want to change the guess length to be something like
+
+       guess_length = len(guess)
+
+Once you've done that, you can train a classifier that includes the
+Length (this code will run as is, it will have a non-trivial effect
+because it will detect empty guesses).  
+
+To train a classifier that uses the Length feature:
 
     python buzzer.py --guesser_type=Gpr --limit=50 \
     --GprGuesser_filename=../models/buzztrain_gpr_cache \
@@ -242,30 +271,40 @@ You'll see quite a bit of output, so I'm just going to walk through it bit by
                           children, but she wouldn't give herself up. Doctor Mandelet advises
                           this character's husband to permit her whims, which
 
-This example is where it is answering the name of the novel rather than the book's main character.  You can see all of the features for this example (e.g., Length-guess is 3.3673).
+This example is where it is answering the name of the novel rather
+than the book's main character.  You can see all of the features for
+this example (e.g., Length-guess is 3.3673).
 
 At the end of the eval script, you can see the
 overall accuracy, and the ratio of correct buzzes to incorrect buzzes (should
 be positive), and the buzz position (where in the question it's buzzing).
 
-    Questions Right: 90 (out of 201) Accuracy: 0.75  Buzz ratio: 67.50 Buzz position: 0.054159
+    Questions Right: 90 (out of 201) Accuracy: 0.75  Buzz ratio: .675 Buzz position: 0.054159
 
 And now we'll see what it is without the length features:
 
-    Questions Right: 81 (out of 201) Accuracy: 0.74  Buzz ratio: 58.50 Buzz position: -0.195907
+    Questions Right: 81 (out of 201) Accuracy: 0.74  Buzz ratio: .585 Buzz position: -0.195907
 
 Again, don't focus too much on the accuracy.  The accuracy is actually higher
 for the no feature model!  But the proportion of "Best" outcomes is higher by
 0.02 once you add in this simple feature.
 
-At the very end of the script, you see the weights of each of the features.  Higher values mean that when the feature is high, it is more likely to buzz.  Lower features mean that when the feature is high, it is less likely to buzz.  Features near zero are ignored.  However, keep in mind the average value of the feature ... I'd encourage you to keep your features with mean zero and standard variance to make your life easier.
+At the very end of the script, you see the weights of each of the
+features.  Higher values mean that when the feature is high, it is
+more likely to buzz.  Lower features mean that when the feature is
+high, it is less likely to buzz.  Features near zero are ignored.
+However, keep in mind the average value of the feature ... I'd
+encourage you to keep your features with mean zero and standard
+variance to make your life easier.
 
 Let's see with length:
+
                           Gpr_confidence: 4.4401
                              Length_char: 0.9581
                             Length_guess: -1.0036
                              Length_word: 0.8495
 And without length:
+
                           Gpr_confidence: 5.5703
 
 The classifier with the length is more liketly to buzz later in the question.  If you only have the guesser confidence, then it's obviously correlated with that.  It uses it less if you add in the length as a feature.
@@ -279,10 +318,23 @@ You can:
 * Exclude data
 * Add data
 
-Good Enough
--
-This is a very open-ended assignment.  Improve the "best" class by
-at least 0.02 percent or improve the buzz ratio by 0.02 by adding new features, and you have done enough.
+Good Enough 
+- 
+
+This is a very open-ended assignment.  Improve the "best" class by at
+least 0.02 percent (e.g., go from 0.50 to 0.52) or improve the buzz
+ratio by 0.02 per questionby adding new features, and you have done enough.
+
+The best class is easier to understand: these are the cases where the
+guesser was right, and you buzzed.  
+
+For the buzz ratio, this mimics the quizbowl game that the task is
+adapted from.  You get full credit for being right (best) but negative
+credit (multiplied by .5 for being wrong.  If you have 100 questions and 50 are
+in the best class but 30 are agressive, then you have 50 - 30 * .5 =
+35 "points", or 0.35 per question.  So if you want to raise this by
+0.02 per question, you could either get two more questions right or
+remove four questions from the agressive class to be anything else.
 
 What Can't You Do?
 -
@@ -302,14 +354,17 @@ Finding Correct Guesses (15+ points)
 ------------------------------
 
 15 points of your score will be generated from your performance on the
-the classification competition on the leaderboard.  The performance will be
-evaluated on a held-out test set.  As discussed in more detail in the "good enough" section, we mostly care about increasing the proportion of "best" outcomes and improving the buzz ratio, and raw accuracy alone can be misleading.
+the classification competition on the leaderboard.  The performance
+will be evaluated on a held-out test set.  As discussed in more detail
+in the "good enough" section, we mostly care about increasing the
+proportion of "best" outcomes and improving the buzz ratio, and raw
+accuracy alone can be misleading.
 
-You should be able to significantly
-improve on the baseline system.  If you can
-do much better than your peers, you can earn extra credit (up to 10 points).
+You should be able to significantly improve on the baseline system.
+If you can do much better than your peers, you can earn extra credit
+(up to 10 points).
 
-Analysis (10 Points)
+Analysis 
 --------------
 
 The job of the written portion of the homework is to convince the grader that:
@@ -318,8 +373,9 @@ The job of the written portion of the homework is to convince the grader that:
 * You had a clear methodology for incorporating the new features
 
 Make sure that you have examples and quantitative evidence that your
-features are working well, and include the metrics you chose to measure your system's performance. Be sure to explain how used the data
-(e.g., did you have a development set?) and how you inspected the
+features are working well, and include the metrics you chose to
+measure your system's performance. Be sure to explain how used the
+data (e.g., did you have a development set?) and how you inspected the
 results.
 
 A sure way of getting a low grade is simply listing what you tried and
@@ -331,7 +387,7 @@ How to Turn in Your System
 -
 * ``features.py``: This file includes an implementation of your new features.
 * ``params.py``: This instantiates your new features.  Modify this so that the
-set of your best features runs by *default*.
+set of your best features run by *default*.
 * **Custom Training Data** (If you used additional training data beyond the Wikipedia pages, upload that as well
     * (OR) If either any of your files are >100MB, please submit a shell
     script named ``gather_resources.sh`` that will retrieve one or both of the
@@ -379,7 +435,20 @@ generated the JSON files for the logistic regression homework.
 
     python features.py --json_guess_output=../data/inspect.jsonl --buzzer_guessers 'Gpr' --questions=../data/qanta.buzztrain.json.gz --limit=1000
 
-Make sure that you've enabled all of the features that you want to use.
+Make sure that you've enabled all of the features that you want to
+use.
+
+
+When you run this, you will get two kinds of output.  The first is just a list of your features `data/small_guess.vocab`, which will let you map the integer IDs of your features to the strings that they correspond to.  
+
+The second output is the `json_guess_output` which will have json formatted examples that are exactly the input you used for the logistic regression homework.
+
+
+    {"guess:William Carlos Williams": 1, "Gpr_confidence": -0.34099804599433337, "label": false}
+	{"guess:Ishmael": 1, "Gpr_confidence": -0.30784871498, "label": false}
+	{"guess:Moby-Dick": 1, "Gpr_confidence": -0.215807037715, "label": false}
+	{"guess:Moby-Dick": 1, "Gpr_confidence": -0.17234657054500002,
+	"label": false}
 
 **Q. Why can't I use ``['page']`` or ``['answer']`` when creating
 features?  Can I use it during training?**
@@ -493,6 +562,10 @@ You may want to use these to create features beyoned the default of artithmetic 
 **Q: Why do stupid features sometimes work?**
 
 **A:** Features that sound stupid sometimes reveal something deeper.  For example, the length of the guess can be a proxy for GPT errors (e.g., it failed to complete its answer or didn't stop spewing content).
+
+**Q: What's the Expected Wins metric?**
+
+**A:** The expected wins is a polynomial that converts your buzz position into the probability that if you buzzed there, you would buzz before an "average human".  So the higher the better.  It rewards early buzzes far more than later buzzes.
 
 **Q: Why do clever features sometimes not work?**
 

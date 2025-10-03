@@ -56,8 +56,8 @@ class LengthFeature(Feature):
 
         # How many characters long is the guess?
         if guess is None or guess=="":  
-            yield ("guess", -1)
-        else:
+            yield ("guess", -1)         
+        else:                           
             yield ("guess", guess_length)  
 
             
@@ -117,7 +117,4 @@ if __name__ == "__main__":
     vocab = buzzer.write_json(flags.json_guess_output)
     with open("data/small_guess.vocab", 'w') as outfile:
         for ii in vocab:
-            try:
-                outfile.write("%s\n" % ii)
-            except UnicodeEncodeError:
-                outfile.write("%s\n" % unidecode(ii))
+            outfile.write("%s\n" % ii)
