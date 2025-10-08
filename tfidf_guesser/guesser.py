@@ -76,6 +76,7 @@ def print_guess(guess, max_char=20):
     return output
 
 
+
 class Guesser:
     """
     Base class for guessers.  If it itself is instantiated, it will only guess

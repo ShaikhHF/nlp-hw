@@ -22,6 +22,20 @@ class GuesserTest(unittest.TestCase):
         new_guesser = TfidfGuesser("data/test_guesser", min_df=0.0, max_df=1.0)
         new_guesser.train(kTOY_DATA["train"], min_length=60, max_length=90)
 
+        # DEBUG
+        print("\n=== TRAINING DATA ===")
+        for i, (q, a) in enumerate(zip(new_guesser.questions, new_guesser.answers)):
+            print(f"{i}: Answer={a:30s} Question={q[:80]}")
+
+        print("\n=== VOCABULARY CHECK ===")
+        vocab = new_guesser.tfidf_vectorizer.vocabulary_
+        print(f"Total vocab size: {len(vocab)}")
+        print(f"'boston' in vocab: {'boston' in vocab}")
+        print(f"'maine' in vocab: {'maine' in vocab}")
+        print(f"'england' in vocab: {'england' in vocab}")
+        print(f"'capital' in vocab: {'capital' in vocab}")
+        # END DEBUG
+
         self.assertEqual(len(new_guesser.answers), 7)
         
 
@@ -30,7 +44,7 @@ class GuesserTest(unittest.TestCase):
         for query_result in kTOY_DATA["dev"]:
             query = query_result["text"]
             top = query_result["top"]
-            second = query_result["second"]
+            second = query_result["second"] 
             
             guesses = self.guesser(query)
 
