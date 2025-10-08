@@ -46,7 +46,7 @@ class GuesserTest(unittest.TestCase):
             top = query_result["top"]
             second = query_result["second"] 
             
-            guesses = self.guesser(query)
+            guesses = self.guesser(query, 2)
 
             print("%60s %30s %30s %0.3f" % (query[:60], top[:30], guesses[0]['guess'][:30], guesses[0]['confidence']))
             print("%60s %30s %30s %0.3f" % ("", "", guesses[1]['guess'][:30], guesses[1]['confidence']))

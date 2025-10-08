@@ -275,8 +275,7 @@ if __name__ == "__main__":
         from president_guesser import kPRESIDENT_DATA
         guesser.train(kPRESIDENT_DATA['train'])
         # The WikiGuesser has some results (text from asked about Wikipedia
-        # pages) from saving and we want to cache them to a file so we have
-        # a distinct block for it.
+        # pages) from saving and we want to cache them to a file
     elif flags.guesser_type == "Dan":
         dev_exs = load_questions(flags, secondary=True)
         guesser.set_eval_data(dev_exs)
