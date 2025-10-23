@@ -339,14 +339,14 @@ if __name__ == "__main__":
     argparser.add_argument("--step", help="Initial SG step size",
                            type=float, default=0.1, required=False)
     argparser.add_argument("--vocab", help="Vocabulary of all features",
-                           type=str, default="../data/small_guess.vocab")
+                           type=str, default="./data/small_guess.vocab")# changed from .. to . to run locally 
     argparser.add_argument("--train", help="Training set",
-                           type=str, default="../data/small_guess.buzztrain.jsonl", required=False)
+                           type=str, default="./data/small_guess.buzztrain.jsonl", required=False)# changed from .. to . to run locally 
     argparser.add_argument('--regularization', type=float, default=0.0)
     argparser.add_argument('--learning_rate', type=float, default=0.1)
     argparser.add_argument("--limit", type=int, default=-1)
     argparser.add_argument("--test", help="Test set",
-                           type=str, default="../data/small_guess.buzzdev.jsonl", required=False)
+                           type=str, default="./data/small_guess.buzzdev.jsonl", required=False)# changed from .. to . to run locally 
     argparser.add_argument("--passes", help="Number of passes through train",
                            type=int, default=1, required=False)
 
@@ -370,3 +370,4 @@ if __name__ == "__main__":
     # Iterations
     update_number = 0
     lr.train(train, test, vocab, args.passes)
+    print(len(vocab))

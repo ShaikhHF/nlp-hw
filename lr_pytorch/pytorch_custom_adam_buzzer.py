@@ -1,3 +1,5 @@
+# Name: Hana Shaikh
+
 import pickle
 import random
 from math import exp, log, sqrt
@@ -57,16 +59,22 @@ def create_feature_matrix_sklearn(train_data, test_data=None):
     # -----------------------------------------------------------
     # Implement: Fit a vectorizer on training data into a  sparse matrix
     # -----------------------------------------------------------
-    vectorizer   = None
-    X_train = None
+    vectorizer   = DictVectorizer(sparse = True)
+    X_train = vectorizer.fit_transform(train_dicts)
 
     # Implement: Convert to Dense for PyTorch
+    X_train = X_train.toarray().astype(np.float32)
+
 
     # -----------------------------------------------------------
     # Add the same data processing for test data if it exists
     # -----------------------------------------------------------
-    if test_data:
-        X_test, y_test = None, None
+    if test_data:  
+        test_dicts = [ex.raw_features for ex in test_data]
+        y_test = np.array([ex.y for ex in test_data], dtype=np.float32)
+
+        X_test = vectorizer.transform(test_dicts)
+        X_test = X_test.toarray().astype(np.float32)
     else:
         X_test, y_test = None, None
 
@@ -83,7 +91,7 @@ class SimpleLogreg(nn.Module):
         '''
         TODOs: Implement a single linear layer with the number of features passed in the parameter.
         '''
-        self.linear = None
+        self.linear = nn.Linear(num_features, 1)
         # Initialize weights to zero for consistency with original implementation
         nn.init.zeros_(self.linear.weight)
         nn.init.zeros_(self.linear.bias)
@@ -92,8 +100,8 @@ class SimpleLogreg(nn.Module):
         '''
         TODOs: Implement forward pass with softmax/sigmoid activation function
         '''
-
-        return None
+        logits = self.linear(x)
+        return torch.sigmoid(logits)
 
 
 class CustomAdamOptimizer:
@@ -129,8 +137,10 @@ class CustomAdamOptimizer:
         '''
         TODOs: Set gradients of all parameters to zero
         '''
-        pass
-    
+        for p in self.params:
+            if p.grad is not None:
+                p.grad.zero_()
+
     def step(self):
         '''
         TODOs: Perform a single optimization using Adam
@@ -145,7 +155,8 @@ class CustomAdamOptimizer:
             ''' 
             TODOs: Add weight decay (L2 regularization)
             '''
-            grad = None
+            if self.weight_decay != 0:
+                grad = grad.add(param.data, alpha=self.weight_decay)
 
             # Get state variables
             exp_avg = state['exp_avg']      # m_t
@@ -167,10 +178,30 @@ class CustomAdamOptimizer:
             4. Compute bias-corrected second raw moment estimate: v̂_t = v_t / (1 - β₂ᵗ)
 
             5. Compute step size: α_t = α * √(1 - β₂ᵗ) / (1 - β₁ᵗ)
+<<<<<<< HEAD
 
             6. Update parameters: θ_t = θ_{t-1} - α_t * m_t / (√v_t + ε)
+=======
+            
+            6. Update parameters: θ_t = θ_{t-1} - α_t * m̂_t / (√v̂_t + ε)
+>>>>>>> d736dd5 (lr_pytorch)
             '''
 
+            exp_avg[:] = self.beta1 * exp_avg + (1 - self.beta1) * grad
+            exp_avg_sq[:] = self.beta2 * exp_avg_sq + (1 - self.beta2) * (grad**2)
+
+            bias_corr1 = 1 - self.beta1 ** step
+            bias_corr2 = 1 - self.beta2 ** step
+
+            exp_avg_bc = exp_avg / bias_corr1
+            exp_avg_sq_bc = exp_avg_sq / bias_corr2
+
+            #step_size = self.lr * (sqrt(1 - self.beta2 ** step) / (1 - self.beta1 ** step))
+            step_size = self.lr
+
+            demon = exp_avg_sq_bc.sqrt().add_(self.eps)
+            param.data.addcdiv_(exp_avg_bc, demon, value = -step_size)
+            #piazza post about the step size equation, check both implementations
 
 class Example:
     """
@@ -634,7 +665,7 @@ if __name__ == "__main__":
     argparser.add_argument('--beta1', type=float, default=0.9, help="Adam beta1 parameter")
     argparser.add_argument('--beta2', type=float, default=0.999, help="Adam beta2 parameter") 
     argparser.add_argument('--eps', type=float, default=1e-8, help="Adam epsilon parameter")
-    argparser.add_argument("--limit", type=int, default=-1)
+    argparser.add_argument("--limit", type=int, default=-1)   
     argparser.add_argument("--test", help="Test set",
                            type=str, default="../data/small_guess.buzzdev.jsonl", required=False)
     argparser.add_argument("--passes", help="Number of passes through train",
