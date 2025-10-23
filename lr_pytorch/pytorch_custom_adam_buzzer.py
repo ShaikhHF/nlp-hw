@@ -178,13 +178,8 @@ class CustomAdamOptimizer:
             4. Compute bias-corrected second raw moment estimate: v̂_t = v_t / (1 - β₂ᵗ)
 
             5. Compute step size: α_t = α * √(1 - β₂ᵗ) / (1 - β₁ᵗ)
-<<<<<<< HEAD
 
             6. Update parameters: θ_t = θ_{t-1} - α_t * m_t / (√v_t + ε)
-=======
-            
-            6. Update parameters: θ_t = θ_{t-1} - α_t * m̂_t / (√v̂_t + ε)
->>>>>>> d736dd5 (lr_pytorch)
             '''
 
             exp_avg[:] = self.beta1 * exp_avg + (1 - self.beta1) * grad
