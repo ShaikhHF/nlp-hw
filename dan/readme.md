@@ -38,9 +38,8 @@ dataset(https://pytorch.org/docs/stable/data.html).
 
 The data loader includes two functions, `batchify()` and `vectorize()`. For
 each example, we need to vectorize the question text into a vector using the 
-vocabulary. In this assignment, you need to write the `vectorize()` function
-yourself. We provide the `batchify()` function to split the dataset into
-mini-batches.
+vocabulary.  You don't need to implement anything here, but to implement the
+rest of your code, you need to understand what they do.
 
 What's the Loss Function?
 ----------------------
@@ -51,8 +50,14 @@ our goal?  We want that representation to be closer to a question in
 our train set with the correct label (answer / page) than questions
 with different answers.
 
-So if the wrong answer is closer, we push it away and pull the correct
-answer closer.  
+One way of doing that is by trying to predict what the final answer is 
+by taking the prediction over answers and backpropagating into the 
+answer representations.  This is the loss function required for this 
+homework (*cross entropy*).
+
+Another way of doing that is specifying the loss on the question representations
+directly.  So if the wrong answer is closer, we push it away and pull the correct
+answer closer.  You can implement this for extra credit.
 
 In the code, the positive and negative examples are chose in the
 ``getitem`` function of the `QuestionData` class, but then turned into
@@ -61,13 +66,49 @@ understand everything.  Check the Pytorch documentation:
 
 https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html 
 
+Extreme Toy Data
+----------------
+
+
+The toy data are designed (and the unit tests use this) so that the words when
+are on +1 / -1 on the y or x axis perfectly divide the data.
+
+    def testEmbedding(self):
+        for word, embedding in [["unk",      [+0, +0]],
+                                ["capital",  [+0, -1]],
+                                ["currency", [+0, +1]],
+                                ["england",  [+1, +0]],
+                                ["russia",   [-1, +0]]]:
+
+This is because there are only four answers in the data, and the four words
+combine to signal what the answer is.  After averaging the data, the four
+quadrants represent the answer space.
+
+    def testRealAverage(self):       
+        reference = [([+0.5, +0.5], "england currency"),
+                     ([-0.5, +0.5], "russia currency"),                     
+                     ([-0.5, -0.5], "russia capital"),
+                     ([+0.5, -0.5], "england capital")]
+
+The provided network for testing for the final layer just stretches things out a bit.
+
+    def testNetwork(self):
+        embeddings = self.dan.dan_model.embeddings(self.documents)
+        average = self.dan.dan_model.average(embeddings, self.length)
+        representation = self.dan.dan_model.network(average)
+
+        reference = [([+1.0, +1.0], "currency england"),
+                     ([-1.0, +1.0], "currency russia"),                     
+                     ([-1.0, -1.0], "capital russia"),
+                     ([+1.0, -1.0], "capital england")]
+
 Guide
 -----
 
 First, you need to check to make sure that you can construct an example from
 text.  This is called "vectorizing" in the Pytorch pipeline.
 
-    > python3 dan_test.py 
+    > python dan_test.py 
     Traceback (most recent call last):
     ======================================================================
     FAIL: test_train_preprocessing (__main__.DanTest)
@@ -130,95 +171,113 @@ After you've done that, the system should perfectly answer these questions
     - [0, 0]
     + [3, 1]
 
-Once you have things working, you'll need to train a network.
+Once you have the forward pass working with known weights, you'll need to train a network.
 
-    python3 guesser.py --guesser_type=DanGuesser --question_source=gzjson --questions=../data/qanta.guesstrain.json.gz --secondary_questions=../data/qanta.guessdev.json.gz --limit=10000 --no_cuda
+ The Actual Test Data
+-------------------
+
+For the training, the problem looks much the same, but you'll start from
+random initialization and there will be lots of words that do not contribute
+to finding the right answer.
+
+The data are defined in guesser.py:
+
+             "mini-train": [{"page": "Rouble", "text": "What is this currency of russia"},
+                            {"page": "Pound", "text": "What is this currency of england"},
+                            {"page": "Moscow", "text": "What is this capital of russia"},
+                            {"page": "London", "text": "What is this capital of england"},
+                            {"page": "Rouble", "text": "What 's russia 's currency"},
+                            {"page": "Pound", "text": "What 's england 's currency"},
+                            {"page": "Moscow", "text": "What 's russia 's capital"},
+                            {"page": "London", "text": "What 's england 's capital"}],
+             "mini-dev": [{"page": "Rouble", "text": "What currency is used in russia"},
+                          {"page": "Pound", "text": "What currency is used in england"},
+                          {"page": "Moscow", "text": "What is the capital and largest city of russia"},
+                          {"page": "London", "text": "What is the capital and largest city of england"},
+                          {"page": "Rouble", "text": "What 's the currency in russia"},
+                          {"page": "Pound", "text": "What 's the currency in england"},
+                          {"page": "Moscow", "text": "What 's the capital of russia"},
+                          {"page": "London", "text": "What 's the capital of england"}],
+
+The learned representations won't be as clean, but you should be able to get
+perfect accuracy on this dataset.
+
+
+```
+python dan_guesser.py --question_source=gzjson --questions=./mini-train.json.gz --secondary_questions=./mini-dev.json.gz --limit=1000 --no_cuda --dan_guesser_max_classes=200 --dan_guesser_ans_min_freq=1
+```
+
+Scaling Up
+-----------
+
+We don't expect you to scale up to "real" data for this homework, but you can do so (particularly if you have a GPU).  For that, 
+
+    python dan_guesser.py   --dan_guesser_hidden_units 50   --dan_guesser_vocab_size 30   --dan_guesser_max_classes 4   --dan_guesser_num_workers 0   --dan_guesser_num_epochs 100   --dan_guesser_embed_dim 50   --dan_guesser_nn_dropout 0.3   --dan_guesser_batch_size 4   --dan_guesser_criterion CrossEntropyLoss   --dan_guesser_device cuda --question_source=gzjson --questions=../data/qanta.guesstrain.json.gz --secondary_questions=../data/qanta.guessdev.json.gz --limit=10000
 
 
 Then check to see how well the code does.
 
-    > python3 eval.py --guesser_type=DanGuesser --question_source=gzjson --questions=../data/qanta.guessdev.json.gz --evaluate guesser --limit=250
-    INFO:root:Generating guesses for 250 new question
-
-    miss 0.69
-    ===================
-                   guess: Distillation
-              answer: Lysis
-                  id: 93198
-                text: This process can be induced in cells by sodium deoxycholate or NP-40.
-                      In another context, the Rz and Rz1 proteins help induce this process.
-                      Gram-positive bacteria undergo this process when acted upon by an
-                      enzyme present in hen egg white also known as muramidase. In protists,
-                      this process is continually averted by the action of acidocalcisomes
-                      in tandem with contractile vacuoles. This process occurs when a cell
-                      is placed in an excessively hypotonic solution. A viral reproduction
-                      cycle named for the fact that it causes the host cell to undergo this
-                      process is contrasted with the lysogenic cycle. For 10 points, name
-                      this general process in which a cell is destroyed via the rupturing of
-                      its membrane.
-
-    close 0.31
-    ===================
-
-               guess: Robert_Frost
-              answer: Twenty_Love_Poems_and_a_Song_of_Despair
-                  id: 93290
-                text: The speaker of one poem in this collection describes himself as "the
-                      word without echoes, he who lost everything and he who had everything"
-                      after addressing "you who are silent," a white bee "drunk with honey"
-                      that buzzes in the speaker's soul. This collection contains a poem
-                      that includes the lines "The night is starry and the stars are blue
-                      and shiver in the distance" and "Love is so short, forgetting is so
-                      long." The speaker declares, "You look like a world lying in
-                      surrender" after noting the "white hills, white thighs" of the title
-                      thing in "Body of a Woman." The speaker of the last poem in this
-                      collection repeatedly exclaims "In you everything sank!" right after a
-                      poem beginning "Tonight I can write the saddest lines." For 10 points,
-                      name this early poetry collection by Pablo Neruda.
-
-    hit 0.02
-    ===================
-
-               guess: David_Hume
-              answer: David_Hume
-                  id: 93165
-                text: The dominant edition of this philosopher's works was revised in the
-                      70s by P.H. Nidditch and first edited by Baronet L. A. Selby-Bigge.
-                      This man inspired "quasi-realism," a meta-ethical view formulated by
-                      Simon Blackburn. Elizabeth Anscombe's Intention rejected this
-                      thinker's two-component theory of motivation, in which a desire and a
-                      belief are the only things needed to produce action. This man's
-                      longest book claims that personal identity is a mere "bundle" of
-                      perceptions, and downplays the strength of reason in its second part,
-                      "Of Passions." This billiards enthusiast and secret atheist wrote that
-                      all ideas come from prior "impressions," except perhaps a spectrum's
-                      missing shade of blue. For 10 points, name this author of A Treatise
-                      of Human Nature, an 18th-century empiricist Scotsman.
-
+    > python eval.py --guesser_type=DanGuesser --question_source=gzjson --questions=../data/qanta.guessdev.json.gz --evaluate guesser --limit=10000 --no_cuda
+    ...
     =================
-    Precision @1: 0.0200 Recall: 0.3080
+    close 0.00
+    ===================
+    
+                   guess: Pulsar
+                  answer: Thornton_Wilder
+                      id: 145775
+                    text: The second act of a play by this man opens with a pair of speeches
+                          offering the mottoes "Enjoy Yourselves" and "Save the Family". Food
+                          poisoning-stricken actors, including Miss Somerset, have to be
+                          replaced in the third act of that play by this man, which features a
+                          maid named Lily Sabina and a member of the "Ancient and Honorable
+                          Order of Mammals" who invents the wheel. A dead woman attempts to
+                          relive her (*) twelfth birthday in another of this man's plays, whose
+                          cast includes the alcoholic choir director Simon Stimson. The Antrobus
+                          family survives an ice age in one of his plays, while the Stage
+                          Manager officiates the wedding of Emily Webb and George Gibbs in
+                          Grover's Corners in another. For 10 points, name this playwright of
+                          The Skin of Our Teeth and Our Town.
+    --------------------
+    =================
+    hit 0.00
+    ===================
+    
+                   guess: Surface_tension
+                  answer: Surface_tension
+                      id: 145843
+                    text: Griffith's criterion sets the square root of the product of Young's
+                          modulus and this quantity for a solid equal to a constant to determine
+                          if a material fractures. The pressure differential inside a bubble
+                          equals four times this quantity over the radius of the bubble.
+                          Electrowetting is used when this quantity is high in order to decrease
+                          the contact angle. This quantity equals the increase in Gibbs energy
+                          per increase in (*) exposed area. If this quantity is negative, then a
+                          liquid in a barometer forms a concave meniscus. This value, which is
+                          given in dynes per centimeter and symbolized either sigma or gamma,
+                          leads to capillary action. For 10 points, name this quantity which is
+                          positive when cohesion is stronger than adhesion, and causes molecules
+                          at an interface to cling to each other.
+    --------------------
+    =================
+    Precision @1: 0.0009 Recall: 0.0018
 
 Because many of you don't have GPUs, our goal is not to have you train a
 super-converged model.  We want to see models with a non-zero recall and
 precision guess over at least hundreds of possible answers.  It doesn't have to be
-particularly good (but you can get extra credit if you invest the time).
+particularly good (but you can get more extra credit if you invest the time).
 
 
 What you have to do
 ----------------
 
-**Coding**: (15 points)
+**Coding**: (20 points)
 1. Understand the structure of the code, particularly the
    `QuestionData` class.
 2. Write the data `vectorize()` funtion.
 3. Write DAN model initialization. 
 3. Write the `average()` function.
 4. Write model `forward()` function.
-5. Write the model training/testing function `evaluate()`. We don't have unit tests for this part, but it's necessary to get it correct to achieve reasonable performance.
-
-**Analysis**: (5 points)
-1. Report the accuracy on the dev set. 
-2. Look at the development set and give some examples and explain the possible reasons why these examples are predicted incorrectly (remember that this is what eval.py does for you). 
 
 
 Pytorch install
@@ -238,7 +297,11 @@ https://pytorch.org/get-started/locally/.
 Extra Credit
 ----------------
 
-There are lots of things you could do for extra credit, but here are
+The preferred extra credit for this homework is using a ranking-based loss function.
+Most of the code for finding positive and negative examples is already provided, but
+you may need (or want) to tweak the code so that it gives you what you want.
+
+There are lots of other things you could do for extra credit, but here are
 some ideas:
 
 * Initialize the word representations with
@@ -264,15 +327,24 @@ You can also get extra credit by getting the highest precision and recall by
 tuning training parameters.  If you have other ideas, just ask, and we
 can say whether your proposal makes sense.
 
+Good Enough
+------------
+
+To get full points on this assignment, you'll need to have an implementation that can get perfect on the `mini-dev` dataset when trained on the `mini-train` dataset (6 points). Also, you'll need to pass all test cases in `dan_test.py` (14 points).
+
 What to turn in 
 ----------------
+Please make sure that you get model pickles named correctly, or our autograder won't detect and you may lose the points.
 
-TODO: Update for Gradescope
+**Good Enough**: (20 points)
+1. Submit your `dan_guesser.py` and `parameters.py` file.
+2. Upload your model that train using `mini-train.json.gz` under name `dan_main.torch.pkl`
+3. (optional) `dan_main.data.pkl`  (if you train with MarginRankingLoss)
 
-0. Submit your model file
-1. Submit your `dan_guesser.py` file.
-2. Submit your `analysis.pdf` file. (Please make sure that this is **PDF** file!      No more than one page, include your name at the top of the pdf.)
-3. Upload your model parameters.
+**Extra Credit**: (5 points)
+1. Submit your `analysis.pdf` file to describe what you've done, either by experimenting ranking-based loss, word representations, parameter tuning, etc. (Please make sure that this is **PDF** file!      No more than one page, include your name at the top of the pdf.)
+2. Upload your model that train using `qanta.guesstrain.json.gz` under name `dan_ec.torch.pkl`
+3. (optional) `dan_ec.data.pkl`  (if you train with MarginRankingLoss)
 4. (Optional) Upload the wordvectors you use.
 
 FAQ

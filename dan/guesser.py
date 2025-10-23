@@ -8,20 +8,33 @@ import re
 import json
 import pickle
 import logging
+from nltk.tokenize import sent_tokenize
+from parameters import Parameters
 
 from typing import List, Dict, Iterable, Optional, Tuple, NamedTuple
 
-from nltk.tokenize import sent_tokenize, word_tokenize
-
 alphanum = re.compile('[^a-zA-Z0-9]')
 
-from params import load_guesser, load_questions, setup_logging, Parameters
-from params import add_general_params, add_guesser_params, add_general_params, add_question_params
-
-kTOY_DATA = {"tiny": [{"text": "capital England", "page": "London"},
-                      {"text": "capital Russia", "page": "Moscow"},
-                      {"text": "currency England", "page": "Pound"},
-                      {"text": "currency Russia", "page": "Rouble"}],
+kTOY_DATA = {"tiny": [{"text": "currency england", "page": "Pound"},
+                      {"text": "currency russia", "page": "Rouble"},
+                      {"text": "capital russia", "page": "Moscow"},                      
+                      {"text": "capital england", "page": "London"}],
+             "mini-train": [{"page": "Rouble", "text": "What is this currency of russia"},
+                            {"page": "Pound", "text": "What is this currency of england"},
+                            {"page": "Moscow", "text": "What is this capital of russia"},
+                            {"page": "London", "text": "What is this capital of england"},
+                            {"page": "Rouble", "text": "What 's russia 's currency"},
+                            {"page": "Pound", "text": "What 's england 's currency"},
+                            {"page": "Moscow", "text": "What 's russia 's capital"},
+                            {"page": "London", "text": "What 's england 's capital"}],
+             "mini-dev": [{"page": "Rouble", "text": "What currency is used in russia"},
+                          {"page": "Pound", "text": "What currency is used in england"},
+                          {"page": "Moscow", "text": "What is the capital and largest city of russia"},
+                          {"page": "London", "text": "What is the capital and largest city of england"},
+                          {"page": "Rouble", "text": "What 's the currency in russia"},
+                          {"page": "Pound", "text": "What 's the currency in england"},
+                          {"page": "Moscow", "text": "What 's the capital of russia"},
+                          {"page": "London", "text": "What 's the capital of england"}],
              "train": [{'page': 'Maine', 'text': 'For 10 points, name this New England state with capital at Augusta.'},
                        {'page': 'Massachusetts', 'text': 'For ten points, identify this New England state with capital at Boston.'},
                        {'page': 'Boston', 'text': 'For 10 points, name this city in New England, the capital of Massachusetts.'},
@@ -35,14 +48,14 @@ kTOY_DATA = {"tiny": [{"text": "capital England", "page": "London"},
                        {'page': 'Rhode_Island', 'text': "This colony's Touro Synagogue is the oldest in the United States."},
                        {'page': 'Lima', 'text': 'It is the site of the National University of San Marcos, the oldest university in South America.'},
                        {'page': 'College_of_William_&_Mary', 'text': 'For 10 points, identify this oldest public university in the United States, a college in Virginia named for two monarchs.'}],
-              "dev": [{'text': "This capital of England", "top": 'Maine', "second": 'Boston'},
-                      {'text': "The author of Pride and Prejudice", "top": 'Jane_Austen',
+              "dev": [{'text': "This capital of England.", "top": 'Maine', "second": 'Boston'},
+                      {'text': "The author of Pride and Prejudice.", "top": 'Jane_Austen',
                            "second": 'Jane_Austen'},
-                      {'text': "The composer of the Magic Flute", "top": 'Wolfgang_Amadeus_Mozart',
+                      {'text': "The composer of the Magic Flute.", "top": 'Wolfgang_Amadeus_Mozart',
                            "second": 'Wolfgang_Amadeus_Mozart'},
-                      {'text': "The economic law that says 'good money drives out bad'",
+                      {'text': "The economic law that says 'good money drives out bad'.",
                            "top": "Gresham's_law", "second": "Gresham's_law"},
-                      {'text': "located outside Boston, the oldest University in the United States",
+                      {'text': "Located outside Boston, the oldest University in the United States.",
                            "top": 'College_of_William_&_Mary', "second": 'Rhode_Island'}]
                 }
 
@@ -74,7 +87,7 @@ def print_guess(guess, max_char=20):
             output += "%s:%s\t" % (ii, short)
             
     return output
-
+    
 class GuesserParameters(Parameters):
     guesser_params = [("filename", str, "models/guesser",
                        "Where we save guesser"),
@@ -85,7 +98,7 @@ class GuesserParameters(Parameters):
     def __init__(self):
         Parameters.__init__(self)
         self.params += self.guesser_params
-    
+
 class Guesser:
     """
     Base class for guessers.  If it itself is instantiated, it will only guess
@@ -164,8 +177,8 @@ class Guesser:
         answers_to_questions = self.split_examples(training_data, answer_field, split_by_sentence,
                                                    min_length, max_length)
         self.questions, self.answers = self.filter_answers(answers_to_questions)
-        logging.info("Trained with %i questions and %i answers filtered from %i examples" %
-                     (len(self.questions), len(self.answers), len(training_data)))
+        logging.info("Trained with %i questions and %i [%i unique] answers filtered from %i examples" %
+                     (len(self.questions), len(self.answers), len(set(self.answers)), len(training_data)))
 
         return answers_to_questions
 
@@ -178,6 +191,7 @@ class Guesser:
         function.
         """
         assert len(questions) > 0, "Cannot find phrases without questions"
+        from nltk.tokenize import sent_tokenize, word_tokenize
         from gensim.models.phrases import Phrases, ENGLISH_CONNECTOR_WORDS
 
         # TODO: it might be good to exclude punctuation here
@@ -192,6 +206,8 @@ class Guesser:
         """
         Given text (a question), tokenize the text and look for phrases.
         """
+        from nltk.tokenize import word_tokenize
+
         assert self.phrase_model is not None
         # Todo: perhaps include additional normalization in this function (e.g., lemmatization)
         return self.phrase_model[word_tokenize(question)]
@@ -201,7 +217,7 @@ class Guesser:
         """
         Given a list of questions, create a batch set of predictions.
 
-        This should be overridden my more efficient implementations in subclasses.
+        This should be overridden by more efficient implementations in subclasses.
         """
         from tqdm import tqdm
         guesses = []
@@ -266,38 +282,33 @@ class Guesser:
 1
 
 if __name__ == "__main__":
+
+    from parameters import load_guesser, load_questions, setup_logging
+    from parameters import add_general_params, add_guesser_params, add_question_params
+
     # Train a guesser and save it to a file
     import argparse
     parser = argparse.ArgumentParser()
     add_general_params(parser)    
-    add_guesser_params(parser)
-    add_question_params(parser)
+    guesser_params = add_guesser_params(parser)
+    question_params = add_question_params(parser)
 
     flags = parser.parse_args()
 
     setup_logging(flags)    
-    guesser = load_guesser(flags)
+    guesser = load_guesser(flags, guesser_params)
     questions = load_questions(flags)
     # TODO(jbg): Change to use huggingface data, as declared in flags
 
-    if flags.guesser_type == 'Wiki':
-        guesser.init_wiki(flags.wiki_zim_filename)        
-        train_result = guesser.train(questions,
-                                     flags.guesser_answer_field,
-                                     flags.guesser_split_sentence,
-                                     flags.guesser_min_length,
-                                     flags.guesser_max_length,
-                                     flags.wiki_min_frequency)
-        # The WikiGuesser has some results (text from asked about Wikipedia
-        # pages) from saving and we want to cache them to a file
-        guesser.save()
-    elif flags.guesser_type == 'President':
+    if flags.guesser_type == 'President':
         from president_guesser import kPRESIDENT_DATA
         guesser.train(kPRESIDENT_DATA['train'])
+        # The WikiGuesser has some results (text from asked about Wikipedia
+        # pages) from saving and we want to cache them to a file so we have
+        # a distinct block for it.
     elif flags.guesser_type == "Dan":
         dev_exs = load_questions(flags, secondary=True)
-        guesser.set_eval_data(dev_exs)
-        guesser.train_dan()
+        guesser.train_dan(questions, dev_exs)
         guesser.save()
     elif flags.guesser_type == "ToyTfidf":
         guesser.train(questions,

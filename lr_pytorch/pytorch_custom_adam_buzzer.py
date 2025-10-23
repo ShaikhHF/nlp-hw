@@ -168,7 +168,7 @@ class CustomAdamOptimizer:
 
             5. Compute step size: α_t = α * √(1 - β₂ᵗ) / (1 - β₁ᵗ)
 
-            6. Update parameters: θ_t = θ_{t-1} - α_t * m̂_t / (√v̂_t + ε)
+            6. Update parameters: θ_t = θ_{t-1} - α_t * m_t / (√v_t + ε)
             '''
 
 
