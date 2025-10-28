@@ -3,7 +3,6 @@ python-baseconv
 gensim
 pandas
 torch
-torchvision
 unidecode
 spacy
 openai
@@ -11,4 +10,9 @@ tqdm
 nltk
 bs4
 scikit-learn
-torchtext
+plotnine
+faiss-cpu
+transformers
+datasets     
+evaluate
+accelerate>=0.26.0
