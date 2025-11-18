@@ -149,12 +149,12 @@ class DanPlotter:
 
             
         # Plot document averages
-        for fold, doc_set in [("train", train_docs),
+        for fold, doc_set in [("train", train_docs), 
                               ("dev", dev_docs)]:
             for doc_idx in range(len(doc_set)):
                 ex = doc_set[doc_idx]
-                embeddings = model.embeddings(doc.tokens)
-                average = model.average(embeddings, torch.IntTensor([len(doc)])).clone().detach()
+                embeddings = model.embeddings(doc_set.tokens)
+                average = model.average(embeddings, torch.IntTensor([len(doc_set)])).clone().detach()
                 final = model.network(average).clone().detach()
                 
                 for layer, representation in [("average", average),
@@ -265,7 +265,12 @@ class DanModel(nn.Module):
         # TODOs: Implement the network structure        
         # self.network = None
         #### Your code here
-        self.network = None
+        self.network = nn.Sequential(
+            self.linear1, 
+            activation, 
+            nn.Dropout(self.nn_dropout), 
+            self.linear2
+        )
 
         # To make this work on CUDA, you need to move it to the appropriate
         # device
@@ -277,14 +282,14 @@ class DanModel(nn.Module):
 
     def initialize_parameters(self, initialization):
         if initialization=="identity":
-            assert emb_dim==n_hidden_units, "Cannot initialize to identiy matrix if embedding dimension is not hidden dimension"
+            assert self.emb_dim==self.n_hidden_units, "Cannot initialize to identiy matrix if embedding dimension is not hidden dimension"
             if loss == 'cross_entropy':
-                assert n_hidden_units == n_answers, "Cannot initialize to identity matrix if hidden dimension doesn't match the number of answers"            
+                assert self.n_hidden_units == self.n_answers, "Cannot initialize to identity matrix if hidden dimension doesn't match the number of answers"            
             with torch.no_grad():
-                self.linear1.weight.data.copy_(torch.eye(n_hidden_units))
-                self.linear2.weight.data.copy_(torch.eye(n_hidden_units))
-                self.linear1.bias.data.copy_(torch.zeros(n_hidden_units))
-                self.linear2.bias.data.copy_(torch.zeros(n_hidden_units))                
+                self.linear1.weight.data.copy_(torch.eye(self.n_hidden_units))
+                self.linear2.weight.data.copy_(torch.eye(self.n_hidden_units))
+                self.linear1.bias.data.copy_(torch.zeros(self.n_hidden_units))
+                self.linear2.bias.data.copy_(torch.zeros(self.n_hidden_units))                
                          
                          
     def average(self, text_embeddings: Tensor, text_len: Tensor):
@@ -300,7 +305,9 @@ class DanModel(nn.Module):
         
         for i in range(text_embeddings.size()[0]):
             # Sum embeddings along the sequence dimension and divide by length
-            pass
+            l = text_len[i].item()
+
+            average[i] = text_embeddings[i, :l, :].sum(dim=0) / l
 
         return average
 
@@ -316,9 +323,9 @@ class DanModel(nn.Module):
         # TODOs: Implement the forward function. 
         
     
-        embeddings = None
-        averaged = None
-        representation = None
+        embeddings = self.embeddings(input_text)
+        averaged = self.average(embeddings, text_len)
+        representation = self.network(averaged)
 
         return representation
 
@@ -564,8 +571,16 @@ class QuestionData(Dataset):
         """
 
         assert vocab is not None, "Vocab not initialized"
-        
-        vec_text = None
+        #vec_text = None
+
+        #tokenize using nltk
+        tokenized = tokenizer(ex)
+  
+        # map token to index in vocab
+        indicies = [vocab[token] for token in tokenized]
+
+        #shape
+        vec_text = torch.LongTensor([indicies])
 
         return vec_text
 
@@ -904,7 +919,7 @@ class DanGuesser(Guesser):
         logging.info(f"Loading model to device: {device}")
         
         # Load the checkpoint with proper device mapping - USE device OBJECT not string
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
         
         # Reconstruct the model
         criterion = getattr(nn, checkpoint['criterion'])()

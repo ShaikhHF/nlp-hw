@@ -41,20 +41,36 @@ class LayerNorm(nn.Module):
 
     def forward(self, residual: Float[Tensor, "batch posn d_model"]) -> Float[Tensor, "batch posn d_model"]:
         # implement your solution here
-        pass
+        #center the residual stream (such that it has mean 0)
+        mean = residual.mean(dim = -1, keepdim=True)
+        centered = residual - mean
+
+        #normalize it to have variance 1
+        variance = centered.var(dim = -1, keepdim=True, unbiased=False)
+        normalized = centered / torch.sqrt(variance + self.cfg.layer_norm_eps)
+
+        #re-scale it according to the learned weights
+        scaled = normalized * self.w
+        #add the learned bias
+        output = scaled + self.b
+
+        return output
+
+
+
 
 class Embed(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
         self.cfg = cfg
+        #d_vocab = size of vocab
+        #d_model = size of embedding
         self.W_E = nn.Parameter(torch.empty((cfg.d_vocab, cfg.d_model)))
         nn.init.normal_(self.W_E, std=self.cfg.init_range)
 
     def forward(self, tokens: Int[Tensor, "batch position"]) -> Float[Tensor, "batch position d_model"]:
         #implement your solution here
-        pass
-
-
+        return self.W_E[tokens]
 
 
 class PosEmbed(nn.Module):
@@ -66,7 +82,14 @@ class PosEmbed(nn.Module):
 
     def forward(self, tokens: Int[Tensor, "batch position"]) -> Float[Tensor, "batch position d_model"]:
         #implement your solution here
-        pass
+        #return self.W_pos[tokens]
+
+        #tokens is the token IDs not positional embeddings
+        #from the instructions: crucial difference that the lookup indices correspond to 0, 1, 2, ..., seq_len-1, 
+        # representing the positional indices of tokens within a sequence, instead of token IDs
+
+        _, seq_len = tokens.shape
+        return self.W_pos[:seq_len]
 
 
 class Attention(nn.Module):
@@ -104,12 +127,15 @@ class Attention(nn.Module):
         self, normalized_resid_pre: Float[Tensor, "batch posn d_model"]
     ) -> Float[Tensor, "batch posn d_model"]:
         # Linear Mapping: compute matrices Q, K, and V
-        q = einops.einsum(normalized_resid_pre, self.W_Q, '[fill in pattern here]') + self.b_Q
-        k = einops.einsum(normalized_resid_pre, self.W_K, '[fill in pattern here]') + self.b_K
-        v = einops.einsum(normalized_resid_pre, self.W_V, '[fill in pattern here]') + self.b_V
+        #dimensions of normalized_resid_pre are in function header
+        #dimensions of W_Q, W_K, W_V are in the init function
+        #Output of each: batch, seq_posn, head_index, d_head <- should head_index have dim n_heads??
+        q = einops.einsum(normalized_resid_pre, self.W_Q, 'batch posn d_model, n_heads d_model d_head -> batch posn n_heads d_head') + self.b_Q
+        k = einops.einsum(normalized_resid_pre, self.W_K, 'batch posn d_model, n_heads d_model d_head -> batch posn n_heads d_head') + self.b_K
+        v = einops.einsum(normalized_resid_pre, self.W_V, 'batch posn d_model, n_heads d_model d_head -> batch posn n_heads d_head') + self.b_V
 
         # dot product to compute attention scores
-        a = einops.einsum(q, k, '[fill in pattern here]')
+        a = einops.einsum(q, k, 'batch query_pos n_heads d_head, batch key_pos n_heads d_head -> batch n_heads query_pos key_pos')
 
         # re-scale
         a = a / (self.cfg.d_head ** 0.5)
@@ -120,11 +146,11 @@ class Attention(nn.Module):
         # apply softmax
         a = a.softmax(dim=-1)
 
-        # get get weighted sum of values
-        z = einops.einsum(v, a, '[fill in pattern here]')
+        # get weighted sum of values
+        z = einops.einsum(v, a, 'batch key_pos n_heads d_head, batch n_heads query_pos key_pos -> batch query_pos n_heads d_head') ######### had to change posn to key_pos
 
         # sum over different heads
-        attn_out = einops.einsum(z, self.W_O, '[fill in pattern here]') + self.b_O
+        attn_out = einops.einsum(z, self.W_O, 'batch posn n_heads d_head, n_heads d_head d_model -> batch posn d_model') + self.b_O
 
         return attn_out
 
@@ -134,16 +160,28 @@ class MLP(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.W_in = nn.Parameter(torch.empty((cfg.d_model, cfg.d_mlp)))
-        self.W_out = nn.Parameter(torch.empty((cfg.d_mlp, cfg.d_model)))
+        self.W_out = nn.Parameter(torch.empty((cfg.d_mlp, cfg.d_model)))   
         self.b_in = nn.Parameter(torch.zeros((cfg.d_mlp)))
         self.b_out = nn.Parameter(torch.zeros((cfg.d_model)))
         nn.init.normal_(self.W_in, std=self.cfg.init_range)
         nn.init.normal_(self.W_out, std=self.cfg.init_range)
 
     def forward(
-        self, normalized_resid_mid: Float[Tensor, "batch posn d_model"]
-    ) -> Float[Tensor, "batch posn d_model"]:
-      pass
+        self, normalized_resid_mid: Float[Tensor, "batch posn d_model"]) -> Float[Tensor, "batch posn d_model"]:
+        #1: linear transformation to increase dimensionality
+        a = normalized_resid_mid @ self.W_in + self.b_in
+
+        #2: non-linear activation function 
+        a = gelu_new(a)
+
+        #1: linear transformation to reduce dimensionality back to normal
+        a = a @ self.W_out + self.b_out
+
+        return a
+
+
+
+      
 
 
 class TransformerBlock(nn.Module):
@@ -156,10 +194,18 @@ class TransformerBlock(nn.Module):
         self.mlp = MLP(cfg)
 
     def forward(
-        self, resid_pre: Float[Tensor, "batch position d_model"]
-    ) -> Float[Tensor, "batch position d_model"]:
+        self, resid_pre: Float[Tensor, "batch position d_model"]) -> Float[Tensor, "batch position d_model"]:
         #implement your solution here
-        pass
+        norm_resid_pre = self.ln1(resid_pre)
+        attention = self.attn(norm_resid_pre)
+        resid = resid_pre + attention
+
+        norm_resid = self.ln2(resid)
+        mlp = self.mlp(norm_resid)
+        resid_post = resid + mlp
+
+        return resid_post
+
 
 
 class Unembed(nn.Module):
@@ -171,10 +217,16 @@ class Unembed(nn.Module):
         self.b_U = nn.Parameter(torch.zeros((cfg.d_vocab), requires_grad=False))
 
     def forward(
-        self, normalized_resid_final: Float[Tensor, "batch position d_model"]
-    ) -> Float[Tensor, "batch position d_vocab"]:
+        self, normalized_resid_final: Float[Tensor, "batch position d_model"]) -> Float[Tensor, "batch position d_vocab"]:
         #implement your solution here
-        pass
+        # dense vectors back into discrete token representations
+        #model's internal representations into logits over the vocabulary
+        logits = normalized_resid_final @ self.W_U + self.b_U
+
+        return logits
+
+
+
 
 class DemoTransformer(nn.Module):
     def __init__(self, cfg: Config):
@@ -188,7 +240,19 @@ class DemoTransformer(nn.Module):
 
     def forward(self, tokens: Int[Tensor, "batch position"]) -> Float[Tensor, "batch position d_vocab"]:
         #implement your solution here
-        pass
+        embedded = self.embed(tokens)
+        pos_embeds = self.pos_embed(tokens)
+        residual = embedded + pos_embeds
+
+        for block in range(self.cfg.n_layers):
+            residual = self.blocks[block](residual)
+
+        normalized = self.ln_final(residual)
+
+        logits = self.unembed(normalized)
+
+        return logits
+
 
 def greedy_decode(model, start_tokens, max_new_tokens):
     """
@@ -205,8 +269,15 @@ def greedy_decode(model, start_tokens, max_new_tokens):
     with torch.no_grad():  # Disable gradient calculation for inference
         generated = start_tokens # Shape: [1, seq_len]
 
+        for i in range(max_new_tokens):
+            logits = model(generated)
 
-        pass
+            next_logits = logits[:, -1, :]
+
+            next_token = next_logits.argmax(dim=-1, keepdim=True)
+
+            generated = torch.cat((generated, next_token), dim=1) # need dim=1 otherwise : Sizes of tensors must match except in dimension 0. Expected size 9 but got size 1 for tensor number 1 in the list
+        
         # implement your solution here
 
 
@@ -216,11 +287,11 @@ def greedy_decode(model, start_tokens, max_new_tokens):
 if __name__ == "__main__":
     # Load reference model only when running this file directly
     reference_gpt2 = HookedTransformer.from_pretrained("gpt2-small", fold_ln=False, center_unembed=False, center_writing_weights=False)
-    
+
     reference_text = "Today we are going to implement a Transformer from scratch!"
     tokens = reference_gpt2.to_tokens(reference_text).to(device)
     logits, cache = reference_gpt2.run_with_cache(tokens)
-    
+
     demo_gpt2 = DemoTransformer(Config(debug=False)).to(device)
     demo_gpt2.load_state_dict(reference_gpt2.state_dict(), strict=False)
 
@@ -230,7 +301,7 @@ if __name__ == "__main__":
 
     generated_tokens = greedy_decode(demo_gpt2, start_tokens, max_new_tokens)
     # generated_text = reference_gpt2.to_string(generated_tokens[1:])
-    # generated_text = reference_gpt2.to_string(generated_tokens[0]) 
+    # generated_text = reference_gpt2.to_string(generated_tokens[0])
     generated_text = reference_gpt2.to_string(generated_tokens[0, 1:])
     print("Generated Text:", generated_text)
 
