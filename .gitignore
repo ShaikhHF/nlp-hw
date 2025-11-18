@@ -102,3 +102,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+*.json~
+*.tex~
+*.md~
+*.bib~
+*.aux
+*.bbl
+*.blg
+adversarial/question.synctex.gz

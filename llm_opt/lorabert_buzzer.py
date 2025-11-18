@@ -1,12 +1,38 @@
 from functools import partial
 from collections import defaultdict
+import logging
 
 from typing import Dict, List
 
 import torch
 from transformers import AutoModelForSequenceClassification, AutoModel, AutoTokenizer
+from buzzer import BuzzerParameters
 
 from buzzer import Buzzer
+
+class LoraBertParameters(BuzzerParameters):
+    def __init__(self, customized_params=None):
+        BuzzerParameters.__init__(self)
+        self.name = "lorabert_buzzer"
+        if customized_params:
+            self.params += customized_params
+        else:
+            lorabert_params = [("rank", int, 16, "Rank of LoRA adaptation"),
+                               ("base_model", str, "distilbert-base-uncased", "The HF model we will adapt"),
+                               ("alpha", float, 1.0, "")]
+            self.params += lorabert_params
+                               
+
+    # TODO: These should be inherited from base class, remove 
+    def __setitem__(self, key, value):
+        assert hasattr(self, key), "Missing %s, options: %s" % (key, dir(self))
+        setattr(self, key, value)
+           
+    def set_defaults(self):
+        for parameter, _, default, _ in self.params:
+            name = "%s_%s" % (self.name, parameter)
+            setattr(self, name, default)                
+
 
 def initialize_base_model(helper_function=AutoModelForSequenceClassification,
                           model_name="distilbert-base-uncased"):
@@ -97,7 +123,7 @@ def add_lora(model: torch.nn.Module, rank: int, alpha: float,
     return model
                 
 
-class LoRABertBuzzzer(Buzzer):
+class LoRABertBuzzer(Buzzer):
     def __init__(self, filename, run_length, num_guesses):
         super().__init__(filename, run_length, num_guesses)
 
@@ -110,47 +136,54 @@ class LoRABertBuzzzer(Buzzer):
         add_lora(self.model.distilbert.transformer, rank, alpha)
 
     def dataset_from_questions(self, questions, answer_field="page"):
+        """
+        Build the dataframe so we can do fine tuning, requires us to get all the runs
+        """
+        
         from eval import rough_compare
         from datasets import Dataset
         import pandas as pd
-
-        metadata, answers, runs = self._clean_questions(questions, self.run_length, answer_field)
         
+        metadata, answers, runs = self._clean_questions(questions, self.run_length, answer_field)
 
-        assert self._primary_guesser == "gpr", "This code only works with GPR guessers for the moment"
-        guesser = self._guessers[self._primary_guesser]
+        all_guesses = {}
+        logging.info("Building guesses from %s" % str(self._guessers.keys()))
+        for guesser in self._guessers:
+            all_guesses[guesser] = self._guessers[guesser].batch_guess(runs, self.num_guesses)
+            logging.info("%10i guesses from %s" % (len(all_guesses[guesser]), guesser))
+            assert len(all_guesses[guesser]) == len(runs), "Guesser %s wrong size" % guesser
+            
+        assert len(runs) == len(answers), "Runs (%i) don't match answers (%i)" % (len(questions), len(answers))
+        assert len(metadata) == len(runs),  "Metadata (%i) don't match answers (%i)" % (len(metadata), len(answers))
+
+        for guesser in all_guesses:
+            assert len(all_guesses[guesser]) == len(runs), "Guesser %s length (%i) didn't match runs (%i)" % (guesser, len(all_guesses[guesser]), len(runs))
+        
         dataset = []
-
-        misses = 0
-        hits = 0
-        for metadatum, answer, run in zip(metadata, answers, runs):
+        
+        for guesser_id in all_guesses:
+          for metadatum, answer, guesses, run in zip(metadata, answers, all_guesses[guesser_id], runs):
             example = {}
 
-            clean = guesser.clean(run)
-            if clean in guesser.cache:
-                correct = 0
-                if rough_compare(guesser.cache[clean]["guess"], answer):
+            for guess in guesses:
+                if rough_compare(guess['guess'], answer):
                     correct = 1
-                hits += 1
-            else:
-                misses += 1
-                continue
+                else:
+                    correct = 0
 
-            if answer is None:
-                answer = ""
+                if answer is None:
+                    answer = ""
 
-            example["text"] = run + " [SEP] " + answer
-            example["label"] = correct
+                example["text"] = "%0.2f [SEP] %s [SEP] %s" % (guess['confidence'], guess['guess'], run)
+                example["label"] = correct
 
-            dataset.append(example)
+                dataset.append(example)
 
-
-        print("Hits: %i, Misses: %i" % (hits, misses))
         dataframe = pd.DataFrame(data=dataset)
-        print(dataframe)
+        print(dataframe.head())
         return Dataset.from_pandas(dataframe)
 
-    def train(self, train_questions, eval_questions):
+    def train(self, finetune_dataset, eval_dataset):
         import numpy as np
         from transformers import DataCollatorWithPadding
         from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
@@ -165,8 +198,8 @@ class LoRABertBuzzzer(Buzzer):
             return self.tokenizer(examples["text"], truncation=True)
         
         dataset = {}
-        dataset["train"] = train_dataset.map(preprocess_function, batched=True)
-        dataset["eval"] = dev_dataset.map(preprocess_function, batched=True)
+        dataset["train"] = finetune_dataset.map(preprocess_function, batched=True)
+        dataset["eval"] = eval_dataset.map(preprocess_function, batched=True)
         data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
 
         def compute_metrics(eval_pred):
@@ -181,7 +214,7 @@ class LoRABertBuzzzer(Buzzer):
             per_device_eval_batch_size=16,
             num_train_epochs=2,
             weight_decay=0.01,
-            evaluation_strategy="epoch",
+            eval_strategy="epoch",
             save_strategy="epoch",
             load_best_model_at_end=True,
             push_to_hub=False,
@@ -203,47 +236,50 @@ class LoRABertBuzzzer(Buzzer):
 
 if __name__ == "__main__":
     import gzip
-    from gpr_guesser import GprGuesser
+
     import argparse
     import json
+
+    from parameters import add_buzzer_params, add_question_params, load_guesser, load_buzzer, load_questions, add_general_params, setup_logging, add_guesser_params
+    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_fold', type=str, default="../data/qanta.buzztrain.json.gz")
-    parser.add_argument('--test_fold', type=str, default="../data/qanta.buzzdev.json.gz")
-    parser.add_argument('--train_cache', type=str, default="../models/buzztrain_gpr_cache")
-    parser.add_argument('--test_cache', type=str, default="../models/buzzdev_gpr_cache")
+    # parser.add_argument('--train_fold', type=str, default="../data/qanta.buzztrain.json.gz")
+    # parser.add_argument('--test_fold', type=str, default="../data/qanta.buzzdev.json.gz")
+    # parser.add_argument('--train_cache', type=str, default="../models/buzztrain_gpr_cache")
+    # parser.add_argument('--test_cache', type=str, default="../models/buzzdev_gpr_cache")
 
-    parser.add_argument('--run_length', type=int, default=100)  
-    parser.add_argument('--limit', type=int, default=-1)
+    # parser.add_argument('--run_length', type=int, default=100)  
+    # parser.add_argument('--limit', type=int, default=-1)
 
-    parser.add_argument('--rank', type=int, default=16)
-    parser.add_argument('--alpha', type=float, default=1.0)
-    parser.add_argument('--model_name', type=str, default="distilbert-base-uncased")
+    # parser.add_argument('--rank', type=int, default=16)
+    # parser.add_argument('--alpha', type=float, default=1.0)
+    # parser.add_argument('--model_name', type=str, default="distilbert-base-uncased")
+
+    guesser_params = add_guesser_params(parser)
+    buzzer_params = add_buzzer_params(parser)
+    question_params = add_question_params(parser)
+
+    add_general_params(parser)
+    flags = parser.parse_args()    
 
     flags = parser.parse_args()
-
-    buzzer = LoRABertBuzzzer(filename='', run_length=flags.run_length, num_guesses=1)
-    buzzer.initialize_model(flags.model_name, flags.rank, flags.alpha)
+    
+    guesser = load_guesser(flags, guesser_params, load=True)    
+    buzzer = load_buzzer(flags, buzzer_params)
+    finetune_questions = load_questions(flags, secondary=False)
+    dev_questions = load_questions(flags, secondary=True)
+    
+    setup_logging(flags)    
 
     # Train the model
-    with gzip.open(flags.train_fold) as infile:
-        train_questions = json.load(infile)
-        if flags.limit > 0:
-            train_questions = train_questions[:flags.limit]
+    if finetune_questions:
+      if flags.limit > 0:
+        finetune_questions = finetune_questions[:flags.limit]
+      finetune_dataset = buzzer.dataset_from_questions(finetune_questions)
 
-        guesser = GprGuesser(flags.train_cache)   
-        guesser.load()     
-        buzzer.add_guesser("gpr", guesser, primary_guesser=True)
-        train_dataset = buzzer.dataset_from_questions(train_questions)
-
-
-    with gzip.open(flags.test_fold) as infile:
-        dev_questions = json.load(infile)
-        if flags.limit > 0:
-            dev_questions = dev_questions[:flags.limit]
-
-        guesser = GprGuesser(flags.test_cache)
-        guesser.load()
-        buzzer.add_guesser("gpr", guesser, primary_guesser=True, replace_guesser=True)
-        dev_dataset = buzzer.dataset_from_questions(dev_questions)
+    if dev_questions:
+      if flags.limit > 0:
+        dev_questions = dev_questions[:flags.limit]
+      dev_dataset = buzzer.dataset_from_questions(dev_questions)
         
-    buzzer.train(train_questions, dev_questions)
+    buzzer.train(finetune_dataset, dev_dataset)

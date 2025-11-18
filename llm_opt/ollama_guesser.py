@@ -51,7 +51,7 @@ def validate_answer(example: dspy.Example, pred, trace=None):
     if len(contexts) > 0:
         retrieval_bonus /= len(contexts)
 
-    logging.info("Retrieval bonus", example.answer, retrieval_bonus, str(x["guess"] for x in contexts))
+    logging.info("Retrieval bonus = %0.2f from  ans=%s clues=%s" % (retrieval_bonus, example.answer, ", ".join(x["guess"] for x in contexts)))
         
     # Bonus for correct confidence 
     if correct:
@@ -176,7 +176,7 @@ class OllamaDspy(Guesser):
 
         assert max_n_guesses == 1, "Can only give one guess"
         result = model(question)
-        return {"guess": result.guess, "confidence": result.confidence, "evidence": result.context}
+        return [{"guess": result.guess, "confidence": result.confidence, "evidence": result.context}]
             
             
     def set_ollama_model(self, model):
@@ -185,7 +185,7 @@ class OllamaDspy(Guesser):
 
     def load(self):
         path = self.filename
-        self._optimized.load("%s.json" % path)        
+        self._model.load("%s.json" % path)        
 
     def save(self):
         path = self.filename

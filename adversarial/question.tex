@@ -3,6 +3,9 @@
 \usepackage{natbib}
 \bibliographystyle{abbrvnat}
 
+\title{Adversarial Questions}
+\author{Zhang San}
+
 \newcommand{\hezehui}{
   \begin{CJK*}{UTF8}{gbsn}
     何泽慧
@@ -11,18 +14,27 @@
 
 \begin{document}
 
-\section{The Question}
+\maketitle
+
+\section{The Questions}
+
+\subsection{Fine Structure Constant}
+
+The answer to both the pyramidal and multiple choice question below is the \underline{fine structure constant}, $\alpha \approx \frac{1}{137}$.
+
+\subsubsection{Pyramidal}
 
 \begin{quote}
-The reciprocal of what quantity was estimated to be .9 higher than the
-three-digit integer value popularly associated with it in 1916 experiments
-conducted by a Brandenburg-based researcher?  That researcher also hosted Ho Zah-wei (\hezehui{}) in his
-home; she would later go on to lead the neutron flux team of the Chinese nuclear program.
+  Measurements of this were conducted in 1916 by a Brandenburg-based researcher who hosted  Ho Zah-wei (\hezehui{}), who would later go on to lead the neutron flux team of the Chinese nuclear program.  Those experiments estimated that the reciprocal of this quantity was .9 higher than the three-digit integer value popularly associated with it.  For 10 points, name this constant symbolized by $\alpha$ that controls strength of the electromagnetic interaction between elementary charged particles, approximated as $\frac{1}{137}$.
 \end{quote}
 
-The answer is the \underline{fine structure constant}, $\alpha \approx \frac{1}{137}$.
+\subsubsection{Multiple Choice}
 
-\section{Explaining the Answer}
+\begin{quote}
+The researcher who lead the neutron flux team of the Chinese nuclear program helped a Brandenburg-based researcher estimate the reciprocal of what quantity to be .9 higher than the three-digit integer value popularly associated with it in 1916 experiments?
+\end{quote}
+
+\subsection{Explaining the Answer}
 
 He Zehui was one of the leading minds of the Chinese nuclear program,
 but she was educated in Germany; while there, she stayed at the home
@@ -35,7 +47,17 @@ However, the fine structure constant is typically thought of as
 $\frac{1}{137}$, whose integer value was described as Feynman as being
 ``written by the hand of God''~\citep{feynman-98}.
 
-\section{Why it's Interesting}
+\subsubsection{Distractors}
+
+The multiple choice distractors are other well known physical
+constants, including another one (Proton to Electron Mass Ratio) that
+is almost an integer.  They are not confusable with the correct answer
+because the mass ratio was discovered much earlier, Planck's constant
+was investigated about the same time but does not have an almost
+integer reciprocal, and the Rydberg constant was measured in Sweden.
+None are associated with He Zehui.
+
+\subsection{Why it's Interesting}
 
 \paragraph{Why ask about this topic?}
 The fine structure constant is worthy to ask about because it is one
@@ -69,7 +91,7 @@ alpha.
 And some questions even ask for the integer value.  So this is
 difficult for a good trivia player, but not impossible.
 
-\section{Why it's hard}
+\subsection{Why it's hard}
 
 A simpler version of this question would be: Friedrich Paschen
 estimated that the reciprocal of what constant proposed by Sommerfeld
@@ -94,7 +116,7 @@ common pinyin.
 The additional clue about He Zehui can help point a human in the right
 direction but might distract the computer.
 
-\section{What do QA systems answer?}
+\subsection{What do QA systems answer?}
 
 \begin{itemize}
   \item {\bf ChatGPT}: Unfortunately, the given information is not sufficient to determine the answer to this question.

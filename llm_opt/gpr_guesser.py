@@ -14,6 +14,7 @@ import logging
 
 from baseconv import BaseConverter
 
+kINSTRUCTIONS = "What is the answer to the following question?"
 
 kCACHE_MISS = "CACHE_MISS"
 from guesser import alphanum
