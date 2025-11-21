@@ -83,7 +83,6 @@ class LoRALayer(torch.nn.Module):
 
         # Compute the low-rank delta
 
-        assert delta.shape == output_dimension, "Delta size %s inconsistent with output dimension %i" % (str(delta.shape), self.out_dim)
         return delta
 
 
@@ -127,6 +126,8 @@ class LoRABertBuzzer(Buzzer):
     def __init__(self, filename, run_length, num_guesses):
         super().__init__(filename, run_length, num_guesses)
 
+        self._pipeline = None
+
     def initialize_model(self, model_name, rank, alpha):
         """
         Initialize the model and add LoRA layers.
@@ -135,10 +136,27 @@ class LoRABertBuzzer(Buzzer):
         self.model, self.tokenizer = initialize_base_model(model_name=model_name)
         add_lora(self.model.distilbert.transformer, rank, alpha)
 
+    def add_data(self, questions):
+        """
+        We don't have features, so these become noops
+        """
+        
+        None
+
+    def build_features(self, history_length=0, history_depth=0):
+        """
+        We don't have features, so these become noops
+        """
+        
+        None
+        
     def dataset_from_questions(self, questions, answer_field="page"):
         """
         Build the dataframe so we can do fine tuning, requires us to get all the runs
         """
+
+        # Todo: can we refactor this so this overrides build_features?  It's
+        # basically doing the same thing.  Would be cleaner OOP.
         
         from eval import rough_compare
         from datasets import Dataset
@@ -174,14 +192,45 @@ class LoRABertBuzzer(Buzzer):
                 if answer is None:
                     answer = ""
 
+                # You may want to add additional fields here
                 example["text"] = "%0.2f [SEP] %s [SEP] %s" % (guess['confidence'], guess['guess'], run)
                 example["label"] = correct
+                example["answer"] = answer
+
+                example["id"] = metadatum["qanta_id"]
+
+                # We need the length for eval
+                example["length"] = len(run)
+                example["guess"] = guess['guess']
+                example["confidence"] = guess['confidence']
 
                 dataset.append(example)
 
         dataframe = pd.DataFrame(data=dataset)
         print(dataframe.head())
         return Dataset.from_pandas(dataframe)
+
+    def predict(self, questions):
+        if self._pipeline is None:
+            from transformers import pipeline
+
+            # TODO: set this up to use GPU based on device
+            self._classifier = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer)
+
+            # TODO: Use explainability to generate some features
+            self._classifier.coef_ = [[]]
+
+        inputs = self.dataset_from_questions(questions)
+
+        # Labels are LABEL_0 and LABEL_1
+        predictions = [int(x["label"][-1]) for x in self._classifier(inputs["text"])]
+        for question_index in range(len(questions)):
+            questions[question_index]["run"] = inputs[question_index]["text"]
+            questions[question_index]["guess"] = inputs[question_index]["guess"]
+            questions[question_index]["answer"] = inputs[question_index]["answer"]
+            questions[question_index]["id"] = inputs[question_index]["id"]
+            
+        return predictions, [], [], [pred==label for pred, label in zip(predictions, inputs["label"])], questions
 
     def train(self, finetune_dataset, eval_dataset):
         import numpy as np
@@ -191,7 +240,6 @@ class LoRABertBuzzer(Buzzer):
         
         from tqdm import tqdm
 
-        
         accuracy = evaluate.load("accuracy")
 
         def preprocess_function(examples):
@@ -232,6 +280,11 @@ class LoRABertBuzzer(Buzzer):
 
         trainer.train()
 
+    def save(self):
+        torch.save(self.model, "%s.py" % self.filename)
+
+    def load(self):
+        self.model = torch.load("%s.py" % self.filename)
 
 
 if __name__ == "__main__":
@@ -283,3 +336,4 @@ if __name__ == "__main__":
       dev_dataset = buzzer.dataset_from_questions(dev_questions)
         
     buzzer.train(finetune_dataset, dev_dataset)
+    buzzer.save()

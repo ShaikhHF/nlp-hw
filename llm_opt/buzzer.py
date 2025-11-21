@@ -286,7 +286,7 @@ class Buzzer:
             yield self._classifier.predict(X), guess, features
     
            
-    def predict(self, questions, online=False):
+    def predict(self, questions):
         """
         Predict from a large set of questions whether you should buzz or not.
         """
@@ -355,9 +355,7 @@ class Buzzer:
 if __name__ == "__main__":
     # Train a simple model on QB data, save it to a file
     import argparse
-    from parameters import add_buzzer_params, add_question_params, load_guesser, load_buzzer, load_questions, add_general_params, setup_logging
-
-    from guesser import add_guesser_params
+    from parameters import add_buzzer_params, add_question_params, load_guesser, load_buzzer, load_questions, add_general_params, setup_logging, add_guesser_params
 
     parser = argparse.ArgumentParser()
 

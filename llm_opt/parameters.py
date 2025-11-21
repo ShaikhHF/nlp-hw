@@ -30,10 +30,12 @@ def add_question_params(parser):
 def add_buzzer_params(parser):
     from logistic_buzzer import LogisticParameters
     from lorabert_buzzer import LoraBertParameters
+    from threshold_buzzer import ThresholdParameters
     
     params = {}
     params["logistic"] = LogisticParameters()
     params["lorabert"] = LoraBertParameters()
+    params["threshold"] = ThresholdParameters()
 
     for ii in params:
         params[ii].add_command_line_params(parser)
@@ -207,10 +209,14 @@ def load_buzzer(flags, guesser_params, load=False):
         from lorabert_buzzer import LoRABertBuzzer
         buzzer = LoRABertBuzzer(filename=flags.lorabert_buzzer_filename, run_length=flags.run_length, num_guesses=1)
         buzzer.initialize_model(flags.lorabert_buzzer_base_model, flags.lorabert_buzzer_rank, flags.lorabert_buzzer_alpha)
-    if load:
-        buzzer.load()
+    if flags.buzzer_type == 'threshold':
+        from threshold_buzzer import ThresholdBuzzer
+        buzzer = ThresholdBuzzer(threshold=flags.threshold_buzzer_threshold, run_length=flags.run_length)
 
     assert buzzer is not None, "Buzzer (type=%s) not initialized" % flags.buzzer_type
+    
+    if load:
+        buzzer.load()
 
     for gg in flags.buzzer_guessers:
         guesser = instantiate_guesser(gg, flags, load=True)
@@ -308,7 +314,7 @@ class OllamaParameters(GuesserParameters):
                              ("rag_question_model", str, "models/TfidfGuesser", "Which optimizer do we use for the teleprompter"),
                              ("rag_question_ex", int, 5, "How many RAG results to get"),
                              # TODO: can we use some of the more standard question flags for this?
-                             ("dev_data", str, "data/qanta.guessdev.json.gz", "Source of data to train model (dev by default because rag is trained on train)"),
+                             ("dev_data", str, "../data/qanta.guessdev.json.gz", "Source of data to train model (dev by default because rag is trained on train)"),
                              ("validation_ex", int, 100, "How many validation examples we hold out")
                           ]
             self.params += ollama_params
